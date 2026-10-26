@@ -34,6 +34,9 @@ port (
    scan_ready     : in    std_logic;
    scan_mode      : in    std_logic_vector(3 downto 0);
    scan_req       : out   std_logic_vector(3 downto 0);
+   locked         : in    std_logic;                       -- clocks stable (MMCM locked);
+                                                            -- low resets the memory system,
+                                                            -- disk emulators and video
 
    -- clk_sys domain
    reset          : in    std_logic;                       -- high: machine in reset
@@ -206,7 +209,7 @@ begin
       opm_ce           => opm_ce,
       cm_out           => snd_clkmode,
       vid_hz           => '0',
-      plllock          => '1',
+      plllock          => locked,               -- X68K_top: mem_rstn, dem_rstn, vid_rstn, cpu_rstn
       CPUS             => '0',
       sysrtc           => rtc,
       pMemCke          => sdram_cke,

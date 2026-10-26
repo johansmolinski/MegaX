@@ -3,11 +3,15 @@
 #
 # ghdl's synthesis (VHDL -> Verilog for Verilator) cannot carry an inout port through
 # the hierarchy: the SDRAM data bus SDRAMC -> memcont -> X68K_top comes out
-# unconnected. The copy is upstream's SDRAMC.vhd with two mechanical edits:
+# unconnected. The copy is upstream's SDRAMC.vhd with three mechanical edits:
 #   1. the SDRAM chip model (sdram_chip.sv, a black box for ghdl) is instantiated
 #      inside the controller, on its command outputs and its write data MDATA;
 #   2. the read data register takes the model's output instead of the pin:
-#      "rddat <= PMEMDAT when rising_edge(clk);" -> "... chip_q ...".
+#      "rddat <= PMEMDAT when rising_edge(clk);" -> "... chip_q ...";
+#   3. MDATA's default (others=>'Z') becomes (others=>'0'): ghdl's synthesis turns
+#      the registered tristate into logic that loses later assignments (seen: the
+#      second word of a write burst repeated the first). The model only uses MDATA
+#      in write cycles; Vivado maps the original to a tristate I/O register.
 # Everything else - the controller's logic and timing - is upstream's.
 #
 # usage: sdramc_sim.py <SDRAMC.vhd> <out.vhd>
@@ -53,6 +57,8 @@ signal chip_q : std_logic_vector(15 downto 0);
 ''')
     text = edit(text, 'rddat     <= PMEMDAT when rising_edge(clk);',
                 'rddat     <= chip_q when rising_edge(clk);   -- MegaX simulation: was PMEMDAT')
+    text = edit(text, "\t\t\tMDATA <=(others=>'Z');\n",
+                "\t\t\tMDATA <=(others=>'0');   -- MegaX simulation: was (others=>'Z')\n")
     open(dst, 'w').write(text)
     return 0
 

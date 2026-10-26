@@ -14,14 +14,21 @@
 // (size, lit pixels, checksum); a PPM file whenever the picture changes.
 //
 // usage: sim [--ms <time>] [--dump <dir>] [--max-dumps <n>] [--turbo]
-//            [--slowload <boot.rom>] [--fst <file> --fst-from <ms>] [+plusargs...]
+//            [--slowload <boot.rom>] [--trace <file.vcd> --trace-from <ms> --trace-to <ms>]
+//            [--bus <file> [--bus-from <ms>] [--bus-to <ms>] [--bus-data]] [+plusargs...]
+// The 68000's bus cycles (debug.vlt makes them readable): --bus logs each one
+// (time, function code, R/W, address, data); the most frequent program-fetch
+// addresses are printed at the end.
 
 #include "Vx68_system.h"
+#include "Vx68_system___024root.h"
 #include "verilated.h"
 #if VM_TRACE
-#include "verilated_fst_c.h"
+#include "verilated_vcd_c.h"
 #endif
+#include <algorithm>
 #include <chrono>
+#include <map>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -55,9 +62,12 @@ struct Frame {
 
 int main(int argc, char** argv) {
    double ms_total = 50.0;
-   std::string dump_dir, slowload, fst_file;
-   double fst_from_ms = 0.0;
+   std::string dump_dir, slowload, trace_file;
+   double trace_from_ms = 0.0, trace_to_ms = 1e9;
    int max_dumps = 50;
+   std::string bus_file;
+   double bus_from_ms = 0.0, bus_to_ms = 1e9;
+   bool bus_data_only = false;                           // --bus-data: no program fetches
    bool turbo = false;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
@@ -66,8 +76,13 @@ int main(int argc, char** argv) {
       else if (a == "--max-dumps" && i + 1 < argc) max_dumps = atoi(argv[++i]);
       else if (a == "--turbo") turbo = true;
       else if (a == "--slowload" && i + 1 < argc) slowload = argv[++i];
-      else if (a == "--fst" && i + 1 < argc) fst_file = argv[++i];
-      else if (a == "--fst-from" && i + 1 < argc) fst_from_ms = atof(argv[++i]);
+      else if (a == "--trace" && i + 1 < argc) trace_file = argv[++i];
+      else if (a == "--trace-from" && i + 1 < argc) trace_from_ms = atof(argv[++i]);
+      else if (a == "--trace-to" && i + 1 < argc) trace_to_ms = atof(argv[++i]);
+      else if (a == "--bus" && i + 1 < argc) bus_file = argv[++i];
+      else if (a == "--bus-from" && i + 1 < argc) bus_from_ms = atof(argv[++i]);
+      else if (a == "--bus-to" && i + 1 < argc) bus_to_ms = atof(argv[++i]);
+      else if (a == "--bus-data") bus_data_only = true;
    }
 
    VerilatedContext* ctx = new VerilatedContext;
@@ -75,8 +90,9 @@ int main(int argc, char** argv) {
    Vx68_system* top = new Vx68_system{ctx};
 
 #if VM_TRACE
-   VerilatedFstC* tfp = nullptr;
-   if (!fst_file.empty()) ctx->traceEverOn(true);
+   VerilatedVcdC* tfp = nullptr;
+   bool trace_done = false;
+   if (!trace_file.empty()) ctx->traceEverOn(true);
 #endif
 
    std::vector<uint8_t> rom;
@@ -113,6 +129,7 @@ int main(int argc, char** argv) {
    }
    top->rtc[2] = 0;
 
+   top->locked = 0;                                      // the PLL locks after 1 us
    top->reset = 1;
    top->turbo = turbo;
    top->boot_active = 0;
@@ -123,6 +140,15 @@ int main(int argc, char** argv) {
    top->scan_mode = 0;
    top->clk_ram = top->clk_sys = top->clk_scan = 0;
    top->eval();
+
+   // 68000 bus monitor
+   auto* R = top->rootp;
+   FILE* busf = bus_file.empty() ? nullptr : fopen(bus_file.c_str(), "w");
+   bool bus_as_prev = true;
+   uint32_t bus_addr = 0, bus_fc = 0, bus_rw = 1, bus_dat = 0, bus_ds = 0;
+   long bus_cycles = 0;
+   std::map<uint32_t, long> fetch_hist;
+   long region_rd[256] = {0}, region_wr[256] = {0};      // per 64 KB of address space
 
    // frame capture
    Frame fr;
@@ -150,17 +176,21 @@ int main(int argc, char** argv) {
       top->clk_scan = c_scan.val;
       top->eval();
 #if VM_TRACE
-      if (!fst_file.empty() && !tfp && now >= (fs_t)(fst_from_ms * 1e12)) {
-         tfp = new VerilatedFstC;
+      if (!trace_file.empty() && !tfp && !trace_done && now >= (fs_t)(trace_from_ms * 1e12)) {
+         tfp = new VerilatedVcdC;
          top->trace(tfp, 99);
-         tfp->open(fst_file.c_str());
+         tfp->open(trace_file.c_str());
       }
-      if (tfp) tfp->dump(ctx->time());
+      if (tfp) {
+         tfp->dump(ctx->time());
+         if (now >= (fs_t)(trace_to_ms * 1e12)) { tfp->close(); delete tfp; tfp = nullptr; trace_done = true; }
+      }
 #endif
       (void)ram_rise;
 
       if (sys_rise) {
          sys_cycles++;
+         if (sys_cycles == 40) top->locked = 1;
          // reset for the first 1000 clk_sys clocks (25 us)
          if (sys_cycles == 1000) top->reset = 0;
 
@@ -209,6 +239,26 @@ int main(int argc, char** argv) {
             if (settle < 4096) settle++;
             else top->scan_ready = 1;
          }
+      }
+
+      if (sys_rise) {
+         bool as = R->x68_system__DOT__i_core__DOT__i_asn;
+         if (!as) {                                      // during the cycle: latest values
+            bus_addr = R->x68_system__DOT__i_core__DOT__mpu_addr & 0xFFFFFE;
+            bus_fc = R->x68_system__DOT__i_core__DOT__mpu_fc;
+            bus_rw = R->x68_system__DOT__i_core__DOT__i_rwn;
+            bus_ds = (!R->x68_system__DOT__i_core__DOT__mpu_udsn << 1) | !R->x68_system__DOT__i_core__DOT__mpu_ldsn;
+            bus_dat = bus_rw ? R->x68_system__DOT__i_core__DOT__dbus : R->x68_system__DOT__i_core__DOT__mpu_od;
+         } else if (!bus_as_prev) {                     // the cycle ended
+            bus_cycles++;
+            if ((bus_fc & 3) == 2) fetch_hist[bus_addr]++;
+            else if (bus_fc != 7) (bus_rw ? region_rd : region_wr)[bus_addr >> 16]++;
+            double ms = now / 1e12;
+            if (busf && ms >= bus_from_ms && ms <= bus_to_ms && !(bus_data_only && (bus_fc & 3) == 2))
+               fprintf(busf, "%10.6f %d %c %06X %04X %c%c\n", ms, bus_fc, bus_rw ? 'R' : 'W', bus_addr, bus_dat,
+                       bus_ds & 2 ? 'U' : '-', bus_ds & 1 ? 'L' : '-');
+         }
+         bus_as_prev = as;
       }
 
       if (scan_rise && top->video_ce) {
@@ -266,6 +316,15 @@ int main(int argc, char** argv) {
    }
 
    top->final();
+   if (busf) fclose(busf);
+   std::vector<std::pair<long, uint32_t>> hot;
+   for (auto& kv : fetch_hist) hot.push_back({kv.second, kv.first});
+   std::sort(hot.rbegin(), hot.rend());
+   printf("68000 data accesses per 64 KB (address: reads/writes):");
+   for (int r = 0, n = 0; r < 256; r++)
+      if (region_rd[r] || region_wr[r]) printf("%s %02X0000: %ld/%ld", n++ % 6 ? "" : "\n ", r, region_rd[r], region_wr[r]);
+   printf("\n68000: %ld bus cycles, %zu distinct program addresses; most fetched:\n", bus_cycles, fetch_hist.size());
+   for (size_t i = 0; i < hot.size() && i < 16; i++) printf("  %06X %ld\n", hot[i].second, hot[i].first);
 #if VM_TRACE
    if (tfp) tfp->close();
 #endif

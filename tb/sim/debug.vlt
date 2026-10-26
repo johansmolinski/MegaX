@@ -1,0 +1,11 @@
+`verilator_config
+// MegaX simulation: nets that sim_main.cpp reads (the 68000's bus in X68K_top).
+public_flat_rd -module "x68k_top*" -var "i_asn"
+public_flat_rd -module "x68k_top*" -var "i_rwn"
+public_flat_rd -module "x68k_top*" -var "mpu_addr"
+public_flat_rd -module "x68k_top*" -var "mpu_fc"
+public_flat_rd -module "x68k_top*" -var "dbus"
+public_flat_rd -module "x68k_top*" -var "mpu_od"
+public_flat_rd -module "x68k_top*" -var "mpu_udsn"
+public_flat_rd -module "x68k_top*" -var "mpu_ldsn"
+public_flat_rd -module "x68k_top*" -var "cpu_rstn"

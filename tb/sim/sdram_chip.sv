@@ -6,6 +6,15 @@
 // falling edge E0 is driven at E0 + (CL-1) and stays until the next falling edge;
 // the controller samples it with the rising edge in between (rddat <= PMEMDAT).
 //
+// Board delay: SDRAMC takes the first word of a READ issued at clock edge t0 with
+// the rising edge t0 + 3T (clkstate 5: addr_rc <= start address, rddat <= pins).
+// A CL2 chip on an inverted clock holds that word on its pins only until about
+// t0 + 2.5T; on the MiSTer the SDRAM board's clock and data path delays move it
+// past t0 + 3T. Without them every read returns the next word (seen: the 68000's
+// reset vectors one word off). The model therefore drives read data
+// +sdram_rd_delay=<n> falling edges later (default 1). The MEGA65's clocking has
+// to put the data at the same place (phase 2).
+//
 // Instantiated inside the simulation copy of SDRAMC (tb/sim/sdramc_sim.py): ghdl's
 // synthesis cannot carry the inout data bus through the hierarchy, so the model gets
 // the controller's MDATA (dq_w) and returns dq_r directly.
@@ -32,8 +41,8 @@ module sdram_chip (
    output reg [15:0] dq_r
 );
    localparam longint T_RCD = 15000, T_RP = 15000, T_RAS = 37000, T_RC = 60000,
-                      T_RRD = 14000, T_RFC = 60000, T_WR = 14000, T_POWERUP = 100_000_000,
-                      T_REFWIN = 64_000_000_000;
+                      T_RRD = 14000, T_RFC = 60000, T_WR = 14000, T_POWERUP = 64'd100_000_000,
+                      T_REFWIN = 64'd64_000_000_000;
    localparam int     REF_N = 8192, MAX_SHOWN = 20;
 
    reg [15:0] mem [0:(1<<25)-1];          // {bank, row, column}
@@ -48,6 +57,10 @@ module sdram_chip (
 
    // mode register
    int cl = 2;
+   int rd_delay = 1;                      // extra falling edges of read latency (board)
+   // +sdram_watch=<lo>:<hi> (hex model indices {bank, row, column}): print each
+   // write and each read word of that range
+   int unsigned watch_lo = 1, watch_hi = 0;
    int bl = 1;                            // 1/2/4/8, 0 = full page
    bit mrs_done = 0;
    int init_pall = 0, init_ref = 0;
@@ -58,8 +71,8 @@ module sdram_chip (
    reg [9:0]  bst_col;
    int        bst_left;                   // words left for BL < full page
    // read data pipeline: entry 0 is driven at the next falling edge
-   bit        pipe_v [0:3];
-   reg [24:0] pipe_i [0:3];
+   bit        pipe_v [0:7];
+   reg [24:0] pipe_i [0:7];
 
    // refresh window: times of the last REF_N refreshes
    longint    ref_ring [0:REF_N-1];
@@ -74,6 +87,12 @@ module sdram_chip (
    initial begin
       string f;
       // +sdram_init=<file>: preload (tb/sim/mkbootimg.py writes boot.rom this way)
+      if ($value$plusargs("sdram_watch=%s", f)) begin
+         void'($sscanf(f, "%h:%h", watch_lo, watch_hi));
+         $display("SDRAM: watching %h..%h", watch_lo, watch_hi);
+      end
+      if ($value$plusargs("sdram_rd_delay=%d", rd_delay))
+         $display("SDRAM: read delay %0d falling edges", rd_delay);
       if ($value$plusargs("sdram_init=%s", f)) begin
          $readmemh(f, mem);
          $display("SDRAM: preloaded %s", f);
@@ -81,7 +100,7 @@ module sdram_chip (
       for (int b = 0; b < 4; b++) begin
          open_[b] = 0; t_act[b] = -1_000_000; t_pre[b] = -1_000_000; t_wr_last[b] = -1_000_000;
       end
-      for (int i = 0; i < 4; i++) pipe_v[i] = 0;
+      for (int i = 0; i < 8; i++) pipe_v[i] = 0;
       dq_r = 16'hdead;
    end
 
@@ -97,12 +116,15 @@ module sdram_chip (
       idx = {b, r, c};
    endfunction
 
-   // one column step of a running burst; wraps inside the 1024-column page
+   // one column step of a running burst; wraps inside the 1024-column page.
+   // The core's controller was written for a 512-column chip (CAWIDTH 9, column
+   // bit 9 always 0): a burst that steps from column 511 to 512 would wrap to 0
+   // there. Harmless for read words after the last one the controller takes;
+   // a write there lands elsewhere than on the MiSTer: warned.
+   bit beyond = 0;                        // the running burst has left columns 0..511
+   longint n_rd_beyond = 0, n_wr_beyond = 0;
    function automatic void step_col();
-      if (bst_col == 10'd511 && !wrap_warned) begin
-         wrap_warned = 1;
-         $display("SDRAM WARNING @%0t ps: burst crosses column 511 -> 512 (a 512-column chip would wrap to 0)", $time);
-      end
+      if (bst_col == 10'd511) beyond = 1;
       bst_col = bst_col + 1'b1;
    endfunction
 
@@ -123,11 +145,13 @@ module sdram_chip (
 
       // read data out
       dq_r <= pipe_v[0] ? mem[pipe_i[0]] : 16'hdead;
-      for (int i = 0; i < 3; i++) begin
+      if (pipe_v[0] && pipe_i[0] >= watch_lo && pipe_i[0] <= watch_hi)
+         $display("SDRAM watch @%0t ps: read  %h => %h", $time, pipe_i[0], mem[pipe_i[0]]);
+      for (int i = 0; i < 7; i++) begin
          pipe_v[i] = pipe_v[i+1];
          pipe_i[i] = pipe_i[i+1];
       end
-      pipe_v[3] = 0;
+      pipe_v[7] = 0;
       sched_v = 0;
       sched_i = '0;
 
@@ -153,6 +177,7 @@ module sdram_chip (
          if (now - t_act[ba] < T_RCD) err($sformatf("tRCD: %0d ps", now - t_act[ba]));
          stop_bursts();
          bst_bank = ba; bst_col = a[9:0]; bst_left = (bl == 0) ? -1 : bl;
+         beyond = 0;
          if (cmd == C_READ) begin
             n_rd++;
             rd_active = 1;
@@ -221,6 +246,7 @@ module sdram_chip (
       // the running burst (the command edge itself included)
       if (rd_active && !sched_v) begin
          sched_v = 1; sched_i = idx(bst_bank, row[bst_bank], bst_col);
+         if (beyond) n_rd_beyond++;
          n_words_rd++;
          step_col();
          if (bst_left > 0) begin
@@ -231,6 +257,15 @@ module sdram_chip (
       if (wr_active && (cmd == C_WRITE || cmd == C_NOP)) begin
          reg [24:0] w;
          w = idx(bst_bank, row[bst_bank], bst_col);
+         if (beyond && dqm != 2'b11) begin     // masked words do not count
+            n_wr_beyond++;
+            if (!wrap_warned) begin
+               wrap_warned = 1;
+               $display("SDRAM WARNING @%0t ps: write burst past column 511 (a 512-column chip would wrap to column 0)", $time);
+            end
+         end
+         if (w >= watch_lo && w <= watch_hi)
+            $display("SDRAM watch @%0t ps: write %h <= %h dqm %b (col %0d)", now, w, dq_w, dqm, bst_col);
          if (!dqm[1]) mem[w][15:8] = dq_w[15:8];
          if (!dqm[0]) mem[w][7:0]  = dq_w[7:0];
          t_wr_last[bst_bank] = now;
@@ -242,13 +277,15 @@ module sdram_chip (
          end
       end
       if (sched_v) begin
-         pipe_v[cl-2] = 1;
-         pipe_i[cl-2] = sched_i;
+         pipe_v[cl-2+rd_delay] = 1;
+         pipe_i[cl-2+rd_delay] = sched_i;
       end
    end
 
    final begin
       $display("SDRAM: %0d ACTIVE, %0d READ (%0d words), %0d WRITE (%0d words), %0d REFRESH, longest REFRESH gap %0d ns, %0d errors",
                n_act, n_rd, n_words_rd, n_wr, n_words_wr, n_ref, ref_gap_max / 1000, n_err);
+      $display("SDRAM: words past column 511 (would wrap on a 512-column chip): %0d read, %0d written",
+               n_rd_beyond, n_wr_beyond);
    end
 endmodule

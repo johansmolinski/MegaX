@@ -47,3 +47,25 @@ One entry per increment: what, why, test numbers, build names.
   command right after power-up and waits only ~14.5 us (datasheet: 100 us) - the
   shell must hold it in reset long enough; bursts step from column 511 to 512
   (the MiSTer's chip has 512 columns).
+- Later the same day, the IPL in simulation (runs `ipl-c` .. `ipl-k`):
+  - **Single-threaded Verilator** is 100x faster on the shared Fedora host
+    (0.56 vs 52 s per simulated ms); THREADS=1 is the default.
+  - **SDRAM read timing:** the 68000's reset vectors came back one word off.
+    SDRAMC takes the first read word three clocks after READ; a CL2 chip on the
+    inverted clock only holds it until ~2.5 clocks, so the controller depends on
+    the MiSTer board's delay. The model delays read data by one falling edge
+    (`+sdram_rd_delay`). **For the MEGA65 shell:** the SDRAM clock phase must put
+    the data there (or the read register must move) - check in phase 2.
+  - **`plllock` resets the memory system** (`mem_rstn <= plllock` in X68K_top):
+    tied to '1' in x68_system, the cache controller kept its power-up tags (all
+    "block 0") and the first write to address 0 never got DTACK. x68_system now
+    has a `locked` input (the MMCM's lock on the MEGA65).
+  - **ghdl and registered 'Z':** SDRAMC's MDATA (`(others=>'Z')` default) came
+    out of ghdl's synthesis as logic that kept the first word of a write burst;
+    the simulation copy uses '0' (Vivado maps the original to an I/O tristate).
+  - Result: the IPL runs: clears and tests memory, programs the CRTC at 182 ms
+    (R20 = 0x315: 31 kHz, 512x512; the scan clock switches to 69.552 MHz), black
+    512x512 frames at 55.5 Hz from 200 ms (text palette all 0 at that point, by
+    the IPL), clears the text VRAM (~5.4 us per CLR.L through tvram_ddr's
+    handshake), sends the TV-control codes (E8E003, pulse-width bit-banging).
+    Black until at least 1.2 s; longer runs next.

@@ -3,6 +3,8 @@
 #   make              build obj/sim (ghdl: VHDL -> obj/x68_system.v; Verilator)
 #   make run          run 50 ms from the preloaded boot ROM, frames into obj/frames
 #   make run MS=300   longer
+#   make run TRACE=1 OBJ=obj-trace ARGS="--trace ../../t.vcd --trace-from 0.07 --trace-to 0.08"
+#                     VCD of a window (python3 vcdpeek.py shows signals from it)
 #
 # The boot ROM is MiSTer's boot.rom (Sharp's IPL + CGROM): BOOTROM=<file>; by default
 # the copy in the submodule's releases/ folder (never copied into this repository).
@@ -26,7 +28,7 @@ VHDL_SRC := $(shell awk '$$1=="vhdl"{print $$2}' $(CORE)/sources.txt)
 SV_SRC   := $(shell awk '$$1=="sv"{print $$2}' $(CORE)/sources.txt)
 SDRAMC   := X68000_MiSTerMEGA65/rtl/memory/SDRAMC.vhd
 VHDL_SIM := $(addprefix $(abspath $(CORE))/,$(filter-out $(SDRAMC),$(VHDL_SRC))) $(abspath $(OBJ)/SDRAMC_sim.vhd)
-SV_SIM   := $(addprefix $(CORE)/,$(SV_SRC)) sdram_chip.sv cachememwn.sv
+SV_SIM   := $(addprefix $(CORE)/,$(SV_SRC)) sdram_chip.sv cachememwn.sv debug.vlt
 
 VFLAGS := --cc --exe --build -j 0 --top-module x68_system -O3 +1364-2005ext+v --x-assign 0 --x-initial 0 --no-assert-case \
           --timescale-override 1ps/1ps --threads $(THREADS) \
@@ -35,7 +37,7 @@ VFLAGS := --cc --exe --build -j 0 --top-module x68_system -O3 +1364-2005ext+v --
           -Wno-COMBDLY -Wno-INITIALDLY -Wno-BLKANDNBLK -Wno-STMTDLY -Wno-ASCRANGE \
           -CFLAGS "-O2" --Mdir $(OBJ)/vl -o sim
 ifeq ($(TRACE),1)
-VFLAGS += --trace-fst --trace-structs
+VFLAGS += --trace
 endif
 
 .PHONY: all run clean

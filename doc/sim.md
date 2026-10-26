@@ -35,11 +35,18 @@ copied into this repository). `ARGS="--turbo"`, `ARGS="--slowload <boot.rom>"`,
 3. **What the simulation adds on top** (tb/sim only):
    - `sdramc_sim.py`: ghdl cannot carry the SDRAM's inout data bus through the
      hierarchy, so the simulation uses a copy of upstream's `SDRAMC.vhd` with the
-     chip model instantiated inside it (two mechanical edits; the controller is
-     upstream's);
+     chip model instantiated inside it; its write-data register's `'Z'` default
+     becomes `'0'` (ghdl's synthesis turned the registered tristate into logic
+     that lost assignments: the second word of a write burst repeated the
+     first). Three mechanical edits; the controller is upstream's;
    - `sdram_chip.sv`: the IS42S16320 with full-page bursts on the inverted clock,
      timing and refresh checks (8192 refreshes per 64 ms window), statistics at
-     the end;
+     the end. **Board delay:** SDRAMC takes the first word of a READ three clocks
+     after the command; with an inverted clock a CL2 chip holds it only until
+     ~2.5 clocks, so the controller relies on the MiSTer board's clock/data delay.
+     The model delays read data by one falling edge (`+sdram_rd_delay=1`, the
+     default; 0 makes every read return the next word). The MEGA65 shell must
+     place the data the same way;
    - `fix_dups.py`: ghdl 5.0.1 names an instance output's net
      `<instance>_<port>` even when a signal or port of that name exists; the
      script renames those nets (it stops on anything of another shape);
@@ -58,3 +65,19 @@ Tool working directories: the RAM/ROM init files and fx68k's microcode are read
 from `../../X68000_MiSTerMEGA65/...`, the path Vivado sees from
 `CORE/CORE-R6.runs/synth_1`; ghdl and the simulator therefore run in
 `obj/run/sim`, next to the link `obj/X68000_MiSTerMEGA65`.
+
+## Debugging
+
+- `--bus <file> [--bus-from <ms>] [--bus-to <ms>]`: every 68000 bus cycle
+  (time, function code, R/W, address, data, strobes); at the end a summary of
+  data accesses per 64 KB and the most fetched program addresses (`debug.vlt`
+  makes the bus nets readable).
+- `+sdram_watch=<lo>:<hi>`: every write and read word of SDRAM model indices
+  `{bank, row, column}` in that range.
+- `make run TRACE=1 OBJ=obj-trace ARGS="--trace ../../t.vcd --trace-from <ms>
+  --trace-to <ms>"`: a VCD of a window; `python3 vcdpeek.py t.vcd <regex>...
+  [--from <ms>] [--to <ms>] [--list]` prints the matching signals, one line per
+  change (names: `TOP.x68_system.i_core.ram.cachec.ram_state` and so on).
+- Runs go to the Fedora host: `tools/remote/rsim.sh start <name> run MS=...`,
+  `wait`, `fetch` (log and frames as PNG). One Verilator thread: 0.56 s per
+  simulated ms there; four threads on the shared host were 100 times slower.

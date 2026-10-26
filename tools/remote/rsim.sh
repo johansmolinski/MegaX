@@ -38,8 +38,10 @@ status)
     ssh $H "if kill -0 \$(cat ~/$B/$name.pid) 2>/dev/null; then echo RUNNING; else echo FINISHED; fi; tail -${N:-15} ~/$B/$name.log"
     ;;
 wait)
+    # polls with short ssh calls (one long ssh session was seen to return early)
     name=$1
-    ssh $H "while kill -0 \$(cat ~/$B/$name.pid) 2>/dev/null; do sleep 20; done; tail -${N:-25} ~/$B/$name.log"
+    while ssh $H "kill -0 \$(cat ~/$B/$name.pid) 2>/dev/null"; do sleep 30; done
+    ssh $H "tail -${N:-25} ~/$B/$name.log"
     ;;
 fetch)
     name=$1 dest=${2:-$HOME/megax-work/runs/$name}
