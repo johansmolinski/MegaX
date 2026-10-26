@@ -29,8 +29,9 @@ names).
 2. **`M2M/` is vendored unchanged** from Megamiga (`doc/m2m-provenance.md`).
    A framework change that cannot be avoided gets an `M2M-UPSTREAM <name>`
    tag at every changed place and an entry in that file.
-3. **Never push** this repository or the fork without the user's go-ahead.
-   Commit as `Johan Smolinski <johan.smolinski@gmail.com>`, no
+3. **Push at will** (the user, 2026-10-26: "Everything will be public from
+   day 0"): this repository (`origin` = johansmolinski/MegaX) and the fork's
+   `develop`. Commit as `Johan Smolinski <johan.smolinski@gmail.com>`, no
    Co-Authored-By trailers (the user's rule in Megamiga and PC10-III).
 4. **No Sharp ROMs in the repository or the bitstream.** The IPL ROM and the
    CGROM (MiSTer's `boot.rom`) are Sharp's; the core loads them from the SD
