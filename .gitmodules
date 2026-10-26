@@ -1,0 +1,8 @@
+[submodule "CORE/X68000_MiSTerMEGA65"]
+	path = CORE/X68000_MiSTerMEGA65
+	url = https://github.com/johansmolinski/X68000_MiSTerMEGA65.git
+	branch = develop
+[submodule "M2M/QNICE"]
+	path = M2M/QNICE
+	url = https://github.com/johansmolinski/QNICE-FPGA
+	branch = fat32-fastseek
