@@ -12,6 +12,13 @@ make run MS=200            # 200 ms of machine time, frames in obj/frames/*.ppm
 python3 ppm2png.py obj/frames/*.ppm
 ```
 
+Disks: `make run FD0=boot` mounts the test boot disk (`bootdisk/boot.S`: a 2HD
+boot sector of our own that prints through the IPL's IOCS and draws colour bars,
+built into a 1232 KB XDF by `bootdisk/mkxdf.py`); `FD0=<image>` mounts any image
+(XDF/DIM/HDM by name, else D88). The testbench serves MiSTer's hps_io sector
+interface (`img_*`, `sd_*` of `x68_system`), the same one the MEGA65 shell will
+serve from the SD card.
+
 `BOOTROM=<file>` selects the boot ROM (MiSTer's `boot.rom`: the X68000's IPL and
 CGROM, Sharp's; default: the copy in the submodule's `releases/` folder, never
 copied into this repository). `ARGS="--turbo"`, `ARGS="--slowload <boot.rom>"`,

@@ -10,12 +10,19 @@
 // mkbootimg.py) and the loader handshake runs without bytes, so the core sees
 // ldr_done; --slowload <boot.rom> sends every byte through the real loader instead.
 //
+// Disks: MiSTer's hps_io sector interface (img_*, sd_*), as the MiSTer HPS serves
+// it: --fd0 <image> mounts at 1 ms (D88, or XDF/DIM/HDM by the file name), every
+// request (sd_rd/sd_wr bit n = drive n) is answered after 5 us: sd_ack, then the
+// 512 bytes (read: sd_buff_dout + one-clock sd_buff_wr per byte; write: sd_buff_din
+// per sd_buff_addr), then sd_ack drops. Writes go to the image in memory only.
+//
 // Video: frames from the scanout (clk_scan, video_ce); one line per frame on stdout
 // (size, lit pixels, checksum); a PPM file whenever the picture changes.
 //
 // usage: sim [--ms <time>] [--dump <dir>] [--max-dumps <n>] [--turbo]
 //            [--slowload <boot.rom>] [--trace <file.vcd> --trace-from <ms> --trace-to <ms>]
-//            [--bus <file> [--bus-from <ms>] [--bus-to <ms>] [--bus-data]] [+plusargs...]
+//            [--bus <file> [--bus-from <ms>] [--bus-to <ms>] [--bus-data]]
+//            [--fd0 <image>] [--fd1 <image>] [+plusargs...]
 // The 68000's bus cycles (debug.vlt makes them readable): --bus logs each one
 // (time, function code, R/W, address, data); the most frequent program-fetch
 // addresses are printed at the end.
@@ -68,6 +75,7 @@ int main(int argc, char** argv) {
    std::string bus_file;
    double bus_from_ms = 0.0, bus_to_ms = 1e9;
    bool bus_data_only = false;                           // --bus-data: no program fetches
+   std::string fd_file[2];
    bool turbo = false;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
@@ -83,6 +91,8 @@ int main(int argc, char** argv) {
       else if (a == "--bus-from" && i + 1 < argc) bus_from_ms = atof(argv[++i]);
       else if (a == "--bus-to" && i + 1 < argc) bus_to_ms = atof(argv[++i]);
       else if (a == "--bus-data") bus_data_only = true;
+      else if (a == "--fd0" && i + 1 < argc) fd_file[0] = argv[++i];
+      else if (a == "--fd1" && i + 1 < argc) fd_file[1] = argv[++i];
    }
 
    VerilatedContext* ctx = new VerilatedContext;
@@ -103,6 +113,28 @@ int main(int argc, char** argv) {
       if (fread(rom.data(), 1, rom.size(), f) != rom.size()) { fprintf(stderr, "short boot.rom\n"); return 1; }
       fclose(f);
    }
+
+   // disk images (drive n = sd_rd/sd_wr bit n)
+   std::vector<uint8_t> img[8];
+   bool img_xdf[8] = {false};
+   for (int d = 0; d < 2; d++) {
+      if (fd_file[d].empty()) continue;
+      FILE* f = fopen(fd_file[d].c_str(), "rb");
+      if (!f) { fprintf(stderr, "cannot open %s\n", fd_file[d].c_str()); return 1; }
+      fseek(f, 0, SEEK_END);
+      img[d].resize(ftell(f));
+      fseek(f, 0, SEEK_SET);
+      if (fread(img[d].data(), 1, img[d].size(), f) != img[d].size()) { fprintf(stderr, "short read\n"); return 1; }
+      fclose(f);
+      std::string ext = fd_file[d].size() > 4 ? fd_file[d].substr(fd_file[d].size() - 4) : "";
+      for (auto& c : ext) c = tolower(c);
+      img_xdf[d] = ext == ".xdf" || ext == ".dim" || ext == ".hdm";
+   }
+   enum { D_IDLE, D_WAIT, D_READ, D_WRITE, D_DONE } dstate = D_IDLE;
+   int dwait = 0, ddrive = 0, dbyte = 0, dphase = 0, dlog = 0;
+   bool dwrite = false;
+   uint32_t dlba = 0;
+   int mount_next = 0;                                   // next drive to announce
 
    Clock c_ram{half_period(80.0), 0, false};
    Clock c_sys{half_period(40.0), 0, false};
@@ -137,6 +169,16 @@ int main(int argc, char** argv) {
    top->boot_addr = 0;
    top->boot_data = 0;
    top->scan_ready = 0;
+   top->img_mounted = 0;
+   top->img_readonly = 0;
+   top->img_size = 0;
+   top->img_xdf = 0;
+   top->sd_ack = 0;
+   top->sd_buff_addr = 0;
+   top->sd_buff_dout = 0;
+   top->sd_buff_wr = 0;
+   top->fd_eject = 0;
+   top->fd_sync = 0;
    top->scan_mode = 0;
    top->clk_ram = top->clk_sys = top->clk_scan = 0;
    top->eval();
@@ -217,6 +259,70 @@ int main(int argc, char** argv) {
             }
             break;
          default: break;
+         }
+
+         // disk mounts: one drive per clock from 1 ms on (40000 clk_sys)
+         top->img_mounted = 0;
+         if (sys_cycles >= 40000 && mount_next < 8) {
+            int d = mount_next++;
+            if (!img[d].empty()) {
+               top->img_mounted = 1u << d;
+               top->img_size = img[d].size();
+               top->img_xdf = img_xdf[d];
+               printf("[%8.3f ms] drive %d: mounted %s (%zu bytes, %s)\n", now / 1e12, d, fd_file[d].c_str(),
+                      img[d].size(), img_xdf[d] ? "XDF/DIM/HDM" : "D88");
+            }
+         }
+
+         // sector service (hps_io)
+         top->sd_buff_wr = 0;
+         switch (dstate) {
+         case D_IDLE: {
+            unsigned req = (top->sd_rd | top->sd_wr) & 0xFF;
+            if (req) {
+               ddrive = __builtin_ctz(req);
+               dwrite = (top->sd_wr >> ddrive) & 1;
+               dlba = top->sd_lba;
+               dwait = 200;                              // 5 us HPS latency
+               dstate = D_WAIT;
+            }
+            break;
+         }
+         case D_WAIT:
+            if (--dwait == 0) {
+               if (dlog++ < 20)
+                  printf("[%8.3f ms] drive %d: %s block %u\n", now / 1e12, ddrive, dwrite ? "write" : "read", dlba);
+               top->sd_ack = 1u << ddrive;
+               top->sd_buff_addr = 0;
+               dbyte = 0;
+               dphase = 0;
+               dstate = dwrite ? D_WRITE : D_READ;
+            }
+            break;
+         case D_READ:                                    // one byte per 4 clocks
+            if (dphase == 0) {
+               size_t o = (size_t)dlba * 512 + dbyte;
+               top->sd_buff_addr = dbyte;
+               top->sd_buff_dout = o < img[ddrive].size() ? img[ddrive][o] : 0;
+               top->sd_buff_wr = 1;
+            }
+            if (++dphase == 4) {
+               dphase = 0;
+               if (++dbyte == 512) { top->sd_ack = 0; dwait = 40; dstate = D_DONE; }
+            }
+            break;
+         case D_WRITE:                                   // address, then data two clocks later
+            if (dphase == 0) top->sd_buff_addr = dbyte;
+            if (++dphase == 4) {
+               size_t o = (size_t)dlba * 512 + dbyte;
+               if (o < img[ddrive].size()) img[ddrive][o] = top->sd_buff_din;
+               dphase = 0;
+               if (++dbyte == 512) { top->sd_ack = 0; dwait = 40; dstate = D_DONE; }
+            }
+            break;
+         case D_DONE:                                    // let the core drop its request
+            if (--dwait == 0) dstate = D_IDLE;
+            break;
          }
 
          // video clock (x68k_video_clock.sv, mgmt_clk = clk_sys)

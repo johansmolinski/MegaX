@@ -18,8 +18,13 @@
 -- The SDRAM clock is clk_ram inverted (the MiSTer's altddio_out with D1=0,
 -- D2=1); the platform generates it.
 --
--- Status 2026-10-26 (phase 1): no disks, keyboard, mouse or joysticks yet
--- (tied to their idle levels, as on a MiSTer with nothing mounted or pressed).
+-- Disk images reach the core through MiSTer's hps_io sector interface (img_*,
+-- sd_*), served by the platform: the testbench in simulation, the SD card
+-- sector service on the MEGA65. The mount glue of X68000.sv is here.
+--
+-- Status 2026-10-27 (phase 1): no keyboard, mouse or joysticks yet (tied to
+-- their idle levels, as on a MiSTer with nothing pressed); SRAM image
+-- load/save not wired.
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -78,7 +83,25 @@ port (
 
    -- Audio (clk_sys), signed
    audio_l        : out   std_logic_vector(15 downto 0);
-   audio_r        : out   std_logic_vector(15 downto 0)
+   audio_r        : out   std_logic_vector(15 downto 0);
+
+   -- Disk images (clk_sys), MiSTer's hps_io sector interface, 512-byte blocks.
+   -- Drives: 0/1 floppy FDD0/FDD1 (D88, or XDF/DIM/HDM), 2 SASI hard disk
+   -- (HDF), 3 SRAM image, 4..7 SxSI hard disks (HDS).
+   img_mounted    : in    std_logic_vector(7 downto 0);    -- one clock: drive (re)mounted
+   img_readonly   : in    std_logic;
+   img_size       : in    std_logic_vector(63 downto 0);   -- bytes, 0 = no image
+   img_xdf        : in    std_logic;                       -- floppy mount: XDF/DIM/HDM, not D88
+   sd_lba         : out   std_logic_vector(31 downto 0);
+   sd_rd          : out   std_logic_vector(7 downto 0);
+   sd_wr          : out   std_logic_vector(7 downto 0);
+   sd_ack         : in    std_logic_vector(7 downto 0);
+   sd_buff_addr   : in    std_logic_vector(8 downto 0);
+   sd_buff_dout   : in    std_logic_vector(7 downto 0);
+   sd_buff_din    : out   std_logic_vector(7 downto 0);
+   sd_buff_wr     : in    std_logic;
+   fd_eject       : in    std_logic_vector(1 downto 0);    -- one clock: eject FDD0/FDD1
+   fd_sync        : in    std_logic_vector(1 downto 0)     -- write FDD0/FDD1 (D88) changes back
 );
 end entity x68_system;
 
@@ -119,6 +142,24 @@ architecture synthesis of x68_system is
    signal ddram_busy     : std_logic;
 
    signal snd_l, snd_r : std_logic_vector(15 downto 0);
+
+   -- disk mount glue (X68000.sv)
+   type cnt24_t is array(0 to 7) of unsigned(23 downto 0);
+   type cnt16_t is array(0 to 1) of unsigned(15 downto 0);
+   signal mount_count      : cnt24_t := (others => (others => '0'));
+   signal eject_count      : cnt16_t := (others => (others => '0'));
+   signal disk_present     : std_logic_vector(7 downto 0) := (others => '0');
+   signal post_reset_mount : std_logic_vector(7 downto 0) := (others => '0');
+   signal img_mounted_d    : std_logic_vector(7 downto 0);
+   signal img_mounted_old  : std_logic_vector(7 downto 0) := (others => '0');
+   signal fd_eject_d       : std_logic_vector(1 downto 0);
+   signal disk_mode_r      : std_logic := '0';
+   signal disk_mode        : std_logic;
+   signal mist_ack         : std_logic_vector(7 downto 0);
+   signal fd_ack           : std_logic;
+   signal reset_delayed    : unsigned(15 downto 0) := (others => '0');
+   signal core_reset       : std_logic;
+   signal core_reset_d     : std_logic := '1';
 
 begin
 
@@ -187,7 +228,80 @@ begin
 
    boot_wait <= ldr_wr;
    ldr_aen   <= boot_active and not ldr_done;
-   core_rstn <= started and not reset;
+
+   -- X68000.sv's "reset": the external one, stretched by 65535 clocks after a
+   -- SASI image is mounted (status[67]/[68] toggles of the MiSTer menu: n/a)
+   core_reset <= '1' when reset = '1' or reset_delayed /= 0 else '0';
+   core_rstn  <= started and not core_reset;
+
+   -- Disk mount glue, as X68000.sv: a mount is announced to the core as a level
+   -- for 0xFFFFFF clocks (0.42 s); a floppy (re)mount first looks ejected for
+   -- its top 256 * 65536 clocks; after every reset the drives with an image are
+   -- announced again (0xFFFF clocks, plus a one-clock post_reset_mount for the
+   -- XDF emulator); an eject looks ejected for 65535 clocks.
+   p_mount : process(clk_sys)
+   begin
+      if rising_edge(clk_sys) then
+         post_reset_mount <= (others => '0');
+         core_reset_d     <= core_reset;
+         img_mounted_old  <= img_mounted;
+
+         for x in 0 to 7 loop
+            if mount_count(x) /= 0 then
+               mount_count(x) <= mount_count(x) - 1;
+            end if;
+            if img_mounted(x) = '1' then
+               mount_count(x) <= x"FFFFFF";
+               disk_present(x) <= '1' when img_size /= x"0000000000000000" else '0';
+            end if;
+         end loop;
+
+         if core_reset_d = '1' and core_reset = '0' then
+            for x in 0 to 7 loop
+               if disk_present(x) = '1' then
+                  mount_count(x) <= x"00FFFF";
+               end if;
+            end loop;
+            post_reset_mount <= disk_present;
+         end if;
+
+         for i in 0 to 1 loop
+            if fd_eject(i) = '1' then
+               eject_count(i) <= x"FFFF";
+               disk_present(i) <= '0';
+            end if;
+            if eject_count(i) /= 0 then
+               eject_count(i) <= eject_count(i) - 1;
+            end if;
+         end loop;
+
+         if reset_delayed /= 0 then
+            reset_delayed <= reset_delayed - 1;
+         end if;
+         if img_mounted_old(2) = '0' and img_mounted(2) = '1' then
+            reset_delayed <= x"FFFF";
+         end if;
+
+         -- the floppy emulator: D88 (bit level) or XDF/DIM/HDM (sector level),
+         -- by the format of the last floppy mounted
+         if (img_mounted(0) = '1' or img_mounted(1) = '1') and img_size /= x"0000000000000000" then
+            disk_mode_r <= img_xdf;
+         end if;
+      end if;
+   end process p_mount;
+
+   g_fd : for i in 0 to 1 generate
+      fd_eject_d(i)    <= '1' when mount_count(i)(23 downto 16) /= 0 or eject_count(i) /= 0 else '0';
+      img_mounted_d(i) <= '1' when fd_eject_d(i) = '0' and mount_count(i) /= 0 else '0';
+   end generate;
+   g_other : for x in 2 to 7 generate
+      img_mounted_d(x) <= '1' when mount_count(x) /= 0 else '0';
+   end generate;
+
+   disk_mode <= disk_mode_r and (disk_present(0) or disk_present(1));
+   fd_ack    <= sd_ack(1) or sd_ack(0);
+   mist_ack  <= "0000" & sd_ack(3 downto 0) when disk_mode = '1' else
+                sd_ack(7 downto 2) & fd_ack & fd_ack;
 
    i_core : entity work.X68K_top
    port map (
@@ -253,23 +367,23 @@ begin
       pStrB            => open,
       pJoySelA         => open,
       pJoySelB         => open,
-      pFDSYNC          => "00",
-      pFDEJECT         => "00",
+      pFDSYNC          => fd_sync,
+      pFDEJECT         => fd_eject_d,
       pFDMOTOR         => open,
       pFDACTIVE        => open,
       pFDEJECTED       => open,
       pfdwait          => "00",
-      mist_mounted     => (others => '0'),
-      mist_readonly    => (others => '0'),
-      mist_imgsize     => (others => '0'),
-      mist_lba         => open,
-      mist_rd          => open,
-      mist_wr          => open,
-      mist_ack         => (others => '0'),
-      mist_buffaddr    => (others => '0'),
-      mist_buffdout    => (others => '0'),
-      mist_buffdin     => open,
-      mist_buffwr      => '0',
+      mist_mounted     => img_mounted_d or post_reset_mount,
+      mist_readonly    => "0000000" & img_readonly,   -- X68000.sv: 1 bit into 8 (bit 0 only)
+      mist_imgsize     => img_size,
+      mist_lba         => sd_lba,
+      mist_rd          => sd_rd,
+      mist_wr          => sd_wr,
+      mist_ack         => mist_ack,
+      mist_buffaddr    => sd_buff_addr,
+      mist_buffdout    => sd_buff_dout,
+      mist_buffdin     => sd_buff_din,
+      mist_buffwr      => sd_buff_wr,
       pDip             => "0000",
       pLed             => open,
       pPsw             => "11",                -- NMI and POWER buttons released
@@ -306,7 +420,7 @@ begin
       dVMode           => '0',
       opm_sel          => '0',
       mix_fix          => '1',
-      disk_mode        => '0',
+      disk_mode        => disk_mode,
       sxsi_inject      => '0',
       vis_mem          => "0000"
    );

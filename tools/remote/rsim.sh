@@ -5,7 +5,8 @@
 # <name>.pid).
 #
 #   rsim.sh start <name> [make args ...]   copy this checkout (submodules as files, no
-#                                           .git, no tb/sim/obj) and run "make -C tb/sim
+#                                           .git, no tb/sim/obj; rsync via ~/megax-work/.base)
+#                                           and run "make -C tb/sim
 #                                           <make args>" in the background (default: run)
 #   rsim.sh status <name>                   RUNNING/FINISHED and the last lines of the log
 #   rsim.sh wait <name>                     block until it has exited, print the log's tail
@@ -16,6 +17,8 @@
 # Example: tools/remote/rsim.sh start ipl-a run MS=300
 # Other people's jobs run on the host too: never stop anything but our own runs.
 set -euo pipefail
+# no rsync in this AppVM (root changes vanish): the Debian package unpacked into ~/.local
+command -v rsync >/dev/null || PATH=$HOME/.local/opt/rsync/usr/bin:$PATH
 H=fedora
 B=megax-work
 cmd=${1:-}; shift || true
@@ -26,12 +29,16 @@ start)
     name=$1; shift
     [ $# -gt 0 ] || set -- run
     ssh $H "test ! -e ~/$B/$name" || { echo "fedora:~/$B/$name exists - pick another name" >&2; exit 1; }
-    ssh $H "mkdir -p ~/$B/$name"
-    tar -C "$root" -cf - --exclude='.git' --exclude='./tb/sim/obj' --exclude='*.runs' \
-        --exclude='*.cache' --exclude='*.hw' --exclude='./.claude' --exclude='*.rbf' . \
-        | ssh -o Compression=no $H "tar -xf - -C ~/$B/$name"
+    # rsync into a base copy on the host (only changed files travel), then a local
+    # copy of it for this run
+    rsync -a --delete --exclude='.git' --exclude='/tb/sim/obj*' --exclude='*.runs' \
+        --exclude='*.cache' --exclude='*.hw' --exclude='/.claude' --exclude='*.rbf' \
+        "$root/" $H:$B/.base/
+    ssh $H "cp -a ~/$B/.base ~/$B/$name"
     q=$(printf ' %q' "$@")
-    ssh $H "cd ~/$B/$name/tb/sim && setsid nohup make$q > ~/$B/$name.log 2>&1 < /dev/null & echo \$! > ~/$B/$name.pid; echo started pid \$(cat ~/$B/$name.pid)"
+    # cd first, so that setsid itself is the background job: its pid is the new
+    # session's leader (make), and nothing keeps this ssh session open
+    ssh $H "cd ~/$B/$name/tb/sim || exit 1; setsid nohup make$q > ~/$B/$name.log 2>&1 < /dev/null & echo \$! > ~/$B/$name.pid; echo started pid \$(cat ~/$B/$name.pid)"
     ;;
 status)
     name=$1
@@ -53,7 +60,8 @@ fetch)
     ;;
 stop)
     name=$1
-    ssh $H "kill -- -\$(cat ~/$B/$name.pid) 2>/dev/null && echo stopped || echo 'not running'"
+    # the whole session of the run (make, ghdl/verilator or the simulator)
+    ssh $H "p=\$(cat ~/$B/$name.pid); s=\$(ps -o sid= -p \$p | tr -d ' '); if [ -n \"\$s\" ]; then pkill -s \$s && echo stopped; else echo 'not running'; fi"
     ;;
 *)
     sed -n '2,20p' "$0"

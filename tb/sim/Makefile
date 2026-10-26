@@ -3,6 +3,7 @@
 #   make              build obj/sim (ghdl: VHDL -> obj/x68_system.v; Verilator)
 #   make run          run 50 ms from the preloaded boot ROM, frames into obj/frames
 #   make run MS=300   longer
+#   make run FD0=boot the test boot disk (bootdisk/boot.S) in drive 0; FD0=<file> any image
 #   make run TRACE=1 OBJ=obj-trace ARGS="--trace ../../t.vcd --trace-from 0.07 --trace-to 0.08"
 #                     VCD of a window (python3 vcdpeek.py shows signals from it)
 #
@@ -19,6 +20,7 @@ RUN      := $(OBJ)/run/sim
 BOOTROM  ?= $(CORE)/X68000_MiSTerMEGA65/releases/boot.rom
 MS       ?= 50
 ARGS     ?=
+FD0      ?=
 THREADS  ?= 1
 TRACE    ?= 0
 
@@ -70,9 +72,22 @@ $(OBJ)/vl/sim: $(OBJ)/x68_system.v $(SV_SIM) sim_main.cpp Makefile
 $(OBJ)/boot_sdram.hex: $(BOOTROM) mkbootimg.py | $(OBJ)/X68000_MiSTerMEGA65
 	python3 mkbootimg.py $< $@
 
-run: $(OBJ)/vl/sim $(OBJ)/boot_sdram.hex
+# the test boot disk: a 2HD XDF whose boot sector is bootdisk/boot.S
+$(OBJ)/boot.xdf: bootdisk/boot.S bootdisk/mkxdf.py | $(OBJ)/X68000_MiSTerMEGA65
+	m68k-linux-gnu-as -m68000 $< -o $(OBJ)/boot.o
+	m68k-linux-gnu-objcopy -O binary $(OBJ)/boot.o $(OBJ)/boot.bin
+	python3 bootdisk/mkxdf.py $(OBJ)/boot.bin $@
+
+ifeq ($(FD0),boot)
+FD0_DEP  := $(OBJ)/boot.xdf
+FD0_ARG  := --fd0 ../../boot.xdf
+else ifneq ($(FD0),)
+FD0_ARG  := --fd0 $(abspath $(FD0))
+endif
+
+run: $(OBJ)/vl/sim $(OBJ)/boot_sdram.hex $(FD0_DEP)
 	mkdir -p $(OBJ)/frames
-	cd $(RUN) && ../../vl/sim --ms $(MS) --dump ../../frames +sdram_init=../../boot_sdram.hex $(ARGS)
+	cd $(RUN) && ../../vl/sim --ms $(MS) --dump ../../frames +sdram_init=../../boot_sdram.hex $(FD0_ARG) $(ARGS)
 
 clean:
 	rm -rf $(OBJ)
