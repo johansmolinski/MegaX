@@ -69,3 +69,14 @@ One entry per increment: what, why, test numbers, build names.
     the IPL), clears the text VRAM (~5.4 us per CLR.L through tvram_ddr's
     handshake), sends the TV-control codes (E8E003, pulse-width bit-banging).
     Black until at least 1.2 s; longer runs next.
+  - 3 s run (`ipl-l`, 0.69 s wall per simulated ms): after the text VRAM clear
+    (~430 ms) the IPL sets up MFP, SCC, SPC and the system port, the MFP timer
+    interrupt runs at 100 Hz (counter `$9CC` from 5999 down), and the IPL boots
+    "standard": FF0D3C waits 1 s, then IOCS `$43` per floppy unit, retrying while
+    a drive answers status 4 and less than 30 s have passed (`$9CC` >= 3000).
+    No palette or VRAM drawing until 3 s: the screen stays black. Next: give it a
+    disk - a MiSTer-style sector service in the testbench (the same protocol the
+    MEGA65 shell has to serve to X68K_top's mist_* ports) and a small boot sector
+    of our own that sets the text palette and draws, so the whole path (FDC
+    emulation, CPU, text VRAM, video) shows up in a frame without Sharp's IPL
+    screen or any copyrighted disk.
