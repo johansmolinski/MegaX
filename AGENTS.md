@@ -26,6 +26,17 @@ names).
    swap) live in `CORE/vhdl/` of this repository, not in the fork.
    Upstream merges: `git fetch upstream`, fast-forward `MiSTer`, merge it into
    `develop`, record the upstream hash in `doc/history.md`.
+   What the fork carries (details in `doc/history.md`):
+   - `rtl/mega65/x68k_rams.vhd`: the Quartus altsyncram wrappers re-done as
+     inferred RAMs under the same entity names (the originals stay untouched and
+     are simply not built); their init files converted by
+     `rtl/mega65/init/convert.py`;
+   - `rtl/mega65/legalize.py`: mechanical renames of identifiers Vivado or ghdl
+     reject (`context`, `vmode`, `VMODE`, `reg`). On a merge conflict in those
+     files take upstream's version and run the script again;
+   - a handful of one-line fixes with provenance comments (`MEGA65 port
+     <date>`): `grep -rn "MEGA65 port 20" rtl`.
+   The machine's file list for the simulation and Vivado is `CORE/sources.txt`.
 2. **`M2M/` is vendored unchanged** from Megamiga (`doc/m2m-provenance.md`).
    A framework change that cannot be avoided gets an `M2M-UPSTREAM <name>`
    tag at every changed place and an entry in that file.
