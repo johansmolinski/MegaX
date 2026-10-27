@@ -258,3 +258,18 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   before the X68000 leaves reset; a path that no longer works shows its reason for 5 s and
   is forgotten. PC10-III's pc_hdc.asm for six lines.
 - The user freed space on the Fedora host (15 GB free).
+
+## 2026-10-27 - Timing margin: palette in LUT RAM, text VRAM address
+
+- `megax-g` (phase 3) passed only after post-route phys_opt (+0.0006 ns; -0.150 ns before):
+  80 MHz, a GVRAM cache read -> 9 levels of the compositor -> the graphic palette's block
+  RAM address. Fork develop `106650a`: gpram as distributed RAM with registered addresses
+  (port B is never written; the altsyncram's own semantics).
+- `megax-j`: that path gone; the new 80 MHz limit was one tvram_ddr register driving the
+  address of all 128 text VRAM RAMB36 (0 logic levels). `tvram_bram.vhd`: the write
+  registered locally (one clock later: a read reaches the RAM two clocks after its
+  command), raddr/w_addr replicated (max_fanout 16). Simulation `tv-a` (test floppy, 2.7 s):
+  the same 37,686 lit pixels as phase 1's picture, mask identical.
+- **`megax-k`: OK, WNS +0.131 ns (SDRAM outputs), clk_ram +0.152, main_clk +4.08, WHS
+  +0.033; 54.6k LUTs, 326 / 365 block RAM tiles. `MegaX-0.1-k-R6.cor`.** (`megax-i`, the
+  same without these two changes: +0.113 ns.)
