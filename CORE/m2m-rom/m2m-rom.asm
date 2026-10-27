@@ -130,21 +130,27 @@ _X68PL_SET      MOVE    R0, R8                  ; R8: handle, R9: slot,
                 RSUB    FD_SETUP, 1             ; R8: 0, 1 = too fragmented,
                 XOR     R9, R9                  ; 2 = FAT32 error
                 CMP     0, R8
-                RBRA    _X68PL_RET, Z
+                RBRA    _X68PL_MEM, Z
                 MOVE    ERR_FD_FRAG, R9
                 CMP     1, R8
-                RBRA    _X68PL_RET, Z
+                RBRA    _X68PL_MEM, Z
                 MOVE    ERR_FD_FAT, R9
-                RBRA    _X68PL_RET, 1
+                RBRA    _X68PL_MEM, 1
 
 _X68PL_BIG      MOVE    3, R8
                 MOVE    ERR_FD_SIZE, R9
-                RBRA    _X68PL_RET, 1
+                RBRA    _X68PL_MEM, 1
 _X68PL_SRBAD    MOVE    3, R8
                 MOVE    ERR_SRAM_SIZE, R9
-                RBRA    _X68PL_RET, 1
+                RBRA    _X68PL_MEM, 1
 _X68PL_HDBAD    MOVE    3, R8
                 MOVE    ERR_HD_SIZE, R9
+
+_X68PL_MEM      MOVE    R9, R2                  ; the settings remember the path
+                MOVE    R7, R9                  ; (R8 = 0: mounted) or forget it
+                MOVE    R0, R10                 ; (x68_img.asm)
+                RSUB    IMG_SAVE, 1
+                MOVE    R2, R9
                 RBRA    _X68PL_RET, 1
 
 _X68PL_OK       XOR     R8, R8
@@ -171,9 +177,13 @@ _GS_NO          AND     0xFFFB, SR
 GROUP_SLOTS     .DW     X68_OPTM_G_FDD0, 0, X68_OPTM_G_FDD1, 1, X68_OPTM_G_SASI, 2
                 .DW     X68_OPTM_G_SXSI1, 4, X68_OPTM_G_SXSI2, 5, X68_OPTM_G_SRAMF, 3
                 .DW     0
-; menu line, x68_sd slot (SPACE eject)
-LINE_SLOTS      .DW     X68_OSM_FDD0_LN, 0, X68_OSM_FDD1_LN, 1, X68_OSM_SASI_LN, 2
-                .DW     X68_OSM_SXSI1_LN, 4, X68_OSM_SXSI2_LN, 5, X68_OSM_SRAM_LN, 3
+; menu line, x68_sd slot, menu group (SPACE eject)
+LINE_SLOTS      .DW     X68_OSM_FDD0_LN, 0, X68_OPTM_G_FDD0
+                .DW     X68_OSM_FDD1_LN, 1, X68_OPTM_G_FDD1
+                .DW     X68_OSM_SASI_LN, 2, X68_OPTM_G_SASI
+                .DW     X68_OSM_SXSI1_LN, 4, X68_OPTM_G_SXSI1
+                .DW     X68_OSM_SXSI2_LN, 5, X68_OPTM_G_SXSI2
+                .DW     X68_OSM_SRAM_LN, 3, X68_OPTM_G_SRAMF
                 .DW     0xFFFF
 
 ERR_FD_SIZE     .ASCII_W "Not a floppy image (more than 8 MB)"
@@ -405,7 +415,8 @@ _X68PS_W2       MOVE    @R2, R5
                 MOVE    2, R9
                 RBRA    _X68PS_RET, 1
 
-_X68PS_OK       XOR     R8, R8
+_X68PS_OK       RSUB    IMG_RESTORE, 1          ; the images as before the
+                XOR     R8, R8                  ; power-off (x68_img.asm)
                 XOR     R9, R9
                 RBRA    _X68PS_RET, 1
 
@@ -503,7 +514,8 @@ CUSTOM_MSG      XOR     R8, R8
 ; PT_OK; an empty line lets SPACE open the browser as before), and a new press
 ; (X68_UNMNT_PREV). The eject: the slot off (x68_sd.vhd gives the core
 ; img_mounted with size 0, hps_io's unmount) and the load status idle.
-HANDLE_CORE_IO  MOVE    R8, @--SP
+HANDLE_CORE_IO  RSUB    IMG_PEND_APPLY, 1       ; restored images' names
+                MOVE    R8, @--SP
                 MOVE    R9, @--SP
                 MOVE    R10, @--SP
                 INCRB
@@ -532,9 +544,10 @@ _HCIO_L         CMP     0xFFFF, @R1
                 RBRA    _HCIO_RET_NS, Z
                 CMP     @R1++, R0
                 RBRA    _HCIO_F, Z
-                ADD     1, R1
+                ADD     2, R1
                 RBRA    _HCIO_L, 1
-_HCIO_F         MOVE    @R1, R2
+_HCIO_F         MOVE    @R1++, R2
+                MOVE    @R1, R1                 ; R1: its menu group
 
                 MOVE    M2M$RAMROM_DEV, R0      ; keep the RAMROM selection
                 MOVE    @R0, R6
@@ -566,6 +579,9 @@ _HCIO_F         MOVE    @R1, R2
                 MOVE    CRTROM_CSR_STATUS, R9   ; Shell shows the line empty again
                 MOVE    CRTROM_CSR_ST_IDLE, R10
                 RSUB    CRTROM_CSR_W, 1
+                MOVE    1, R8                   ; ..and the settings forget it
+                MOVE    R1, R9
+                RSUB    IMG_SAVE, 1
 
 _HCIO_RET       MOVE    M2M$RAMROM_DEV, R0
                 MOVE    R6, @R0
@@ -675,6 +691,14 @@ _F32WX_SEC      RSUB    FAR_CALL, 1
 _F32WX_SETDE    RSUB    FAR_CALL, 1
                 .DW     BANK_F32W, _F32W_SETDE
 
+; the images across power-off (x68_img.asm, code bank BANK_IMG)
+IMG_SAVE        RSUB    FAR_CALL, 1
+                .DW     BANK_IMG, B_IMG_SAVE
+IMG_RESTORE     RSUB    FAR_CALL, 1
+                .DW     BANK_IMG, B_IMG_RESTORE
+IMG_PEND_APPLY  RSUB    FAR_CALL, 1
+                .DW     BANK_IMG, B_IMG_PEND_APPLY
+
 ; ----------------------------------------------------------------------------
 ; FAR_CALL: call a routine in a code bank (Megamiga's, M2M-UPSTREAM
 ; code-banks).
@@ -721,6 +745,7 @@ END_OF_ROM      .DW 0
 
 BANK_F32W       .EQU    0                       ; FAT32 write layer: core
 BANK_F32F       .EQU    1                       ; FAT32 write layer: files
+BANK_IMG        .EQU    2                       ; the images across power-off
 
 #ifdef RELEASE
                 .ORG    0x9000                  ; M2M$CODE_WIN (.ORG takes no symbol)
@@ -730,6 +755,10 @@ BANK_F32F       .EQU    1                       ; FAT32 write layer: files
                 .ORG    0x9000                  ; M2M$CODE_WIN
                 .DW     0x4B01                  ; bank 1: BANK_F32F
 #include "../../M2M/QNICE/monitor/fat32_wfile.asm"
+
+                .ORG    0x9000                  ; M2M$CODE_WIN
+                .DW     0x4B02                  ; bank 2: BANK_IMG
+#include "x68_img.asm"
 #endif
 
 ; ----------------------------------------------------------------------------
@@ -747,6 +776,12 @@ BANK_F32F       .EQU    1                       ; FAT32 write layer: files
 
 X68_UNMNT_PREV  .BLOCK 1                        ; SPACE at the last HANDLE_CORE_IO
 X68_SUB_ACTIVE  .BLOCK 1                        ; 1: a browser/help page runs
+IMG_PEND        .BLOCK 1                        ; x68_img.asm: restored, no name yet
+IMG_KEY         .BLOCK 1                        ; the key IMG_SAVE writes
+IMG_PATH        .BLOCK 127                      ; a path ("SD1:/megax/a.xdf"),
+IMG_PATH_Z      .BLOCK 1                        ; IMG_PLEN words in all
+IMG_FDH         .BLOCK FAT32$FDH_STRUCT_SIZE    ; the directories of its path
+IMG_DE          .BLOCK FAT32$DE_STRUCT_SIZE     ; (IMG_SAVE)
 
 ; The menu heap (Megamiga hard rule 11): the menu structure plus OPTM_HEAP;
 ; for this 33-line menu the demand is about 20 + 470 item characters + 1 +
@@ -763,7 +798,7 @@ HEAP            .BLOCK 1
 ; STACK_SIZE (check HEAP and VAR$STACK_START in m2m-rom.lis). PC10-III's
 ; budget (19296 + its 1280 menu words), less its 412 words of hard disk
 ; variables that MegaX does not have, rounded down.
-HEAP_SIZE       .EQU 19968
+HEAP_SIZE       .EQU 19520
 HEAP            .BLOCK 1
 
                 .ORG    0xFED0                  ; as Megamiga: the FAT32 write layer's
