@@ -27,24 +27,29 @@ set_multicycle_path 2 -setup -end   -from [get_clocks main_clk] -to [get_clocks 
 set_multicycle_path 1 -hold  -end   -from [get_clocks main_clk] -to [get_clocks clk_ram]
 
 ## X68000.sdc: the 68000 (fx68k: phi1/phi2 enables at most every second clk_sys clock) and the
-## DMA controller (DMA63450) work on enables: two clocks for paths from and to them
-set_multicycle_path 2 -setup -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/DMA/*}]
-set_multicycle_path 1 -hold  -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/DMA/*}]
-set_multicycle_path 2 -setup -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/MPU/*}]
-set_multicycle_path 1 -hold  -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/MPU/*}]
-set_multicycle_path 2 -setup -to   [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/MPU/*}]
-set_multicycle_path 1 -hold  -to   [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/MPU/*}]
+## DMA controller (DMA63450) work on enables: two clocks for paths from and to them. Counted in
+## destination clocks for setup AND hold (-end): with Vivado's default (-start) for hold, a
+## path from clk_ram into the 68000 got a 12.5 ns hold requirement (build megax-c, -11 ns).
+## Into the 68000 only from main_clk; clk_ram -> 68000 paths keep the clock-pair rule above.
+set MPU [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/MPU/*}]
+set DMA [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/DMA/*}]
+set_multicycle_path 2 -setup -end -from $DMA
+set_multicycle_path 1 -hold  -end -from $DMA
+set_multicycle_path 2 -setup -end -from $MPU
+set_multicycle_path 1 -hold  -end -from $MPU
+set_multicycle_path 2 -setup -end -from [get_clocks main_clk] -to $MPU
+set_multicycle_path 1 -hold  -end -from [get_clocks main_clk] -to $MPU
 
 ## X68000.sdc: the contrast register is static for the video; BG RAM writes are on sys_ce;
 ## vidcont's address to the cache controller has two clocks; cacheext's srclk is not timed;
 ## the YM3802's interpolator advances every four clocks
 set_false_path -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/cont/contval*}]
-set_multicycle_path 2 -setup -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
-set_multicycle_path 1 -hold  -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
+set_multicycle_path 2 -setup -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
+set_multicycle_path 1 -hold  -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
 set_multicycle_path 2 -setup -end -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/vc/vaddr*}] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/RAM/CACHEC/*}]
 set_multicycle_path 1 -hold  -end -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/vc/vaddr*}] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/RAM/CACHEC/*}]
-set_multicycle_path 4 -setup -end -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_spacing* || NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_countdown*)}]
-set_multicycle_path 3 -hold  -end -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_spacing* || NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_countdown*)}]
+set_multicycle_path 4 -setup -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_spacing* || NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_countdown*)}]
+set_multicycle_path 3 -hold  -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_spacing* || NAME =~ CORE/i_main/i_x68_system/i_core/midi/interp_countdown*)}]
 
 ## qnice_clk (50 MHz) <-> main_clk (40 MHz) and clk_scan: different MMCMs. All crossings are
 ## synchronizers, cdc_stable, xpm FIFOs (x68_boot.vhd) or the framework's own CDCs; bound them
