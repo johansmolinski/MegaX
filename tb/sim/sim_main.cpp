@@ -22,7 +22,12 @@
 // usage: sim [--ms <time>] [--dump <dir>] [--max-dumps <n>] [--turbo]
 //            [--slowload <boot.rom>] [--trace <file.vcd> --trace-from <ms> --trace-to <ms>]
 //            [--bus <file> [--bus-from <ms>] [--bus-to <ms>] [--bus-data]]
-//            [--fd0 <image>] [--fd1 <image>] [+plusargs...]
+//            [--fd0 <image>] [--fd1 <image>]
+//            [--save <file> --save-at <ms>] [--restore <file>] [+plusargs...]
+// Checkpoints (Verilator --savable): --save writes the model and the testbench state
+// at the first clk_sys edge at or after --save-at and runs on; --restore continues
+// from such a file (the same build, the same --fd0/--fd1 images: disk writes made
+// before the save are not in the file). Statistics and frames start afresh.
 // The 68000's bus cycles (debug.vlt makes them readable): --bus logs each one
 // (time, function code, R/W, address, data); the most frequent program-fetch
 // addresses are printed at the end.
@@ -30,6 +35,7 @@
 #include "Vx68_system.h"
 #include "Vx68_system___024root.h"
 #include "verilated.h"
+#include "verilated_save.h"
 #if VM_TRACE
 #include "verilated_vcd_c.h"
 #endif
@@ -76,6 +82,8 @@ int main(int argc, char** argv) {
    double bus_from_ms = 0.0, bus_to_ms = 1e9;
    bool bus_data_only = false;                           // --bus-data: no program fetches
    std::string fd_file[2];
+   std::string save_file, restore_file;
+   double save_at_ms = -1.0;
    bool turbo = false;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
@@ -93,6 +101,9 @@ int main(int argc, char** argv) {
       else if (a == "--bus-data") bus_data_only = true;
       else if (a == "--fd0" && i + 1 < argc) fd_file[0] = argv[++i];
       else if (a == "--fd1" && i + 1 < argc) fd_file[1] = argv[++i];
+      else if (a == "--save" && i + 1 < argc) save_file = argv[++i];
+      else if (a == "--save-at" && i + 1 < argc) save_at_ms = atof(argv[++i]);
+      else if (a == "--restore" && i + 1 < argc) restore_file = argv[++i];
    }
 
    VerilatedContext* ctx = new VerilatedContext;
@@ -201,6 +212,25 @@ int main(int argc, char** argv) {
    const fs_t end_fs = (fs_t)(ms_total * 1e12);
    fs_t now = 0, next_report = (fs_t)1e12;              // every simulated ms
    auto wall0 = std::chrono::steady_clock::now();
+
+   // checkpoints: the testbench's own state next to the model's
+#define TB_STATE(X) X(c_ram) X(c_sys) X(c_scan) X(candidate) X(applied) X(quiet) X(valid) \
+   X(relock) X(settle) X(locked) X(lstate) X(sys_cycles) X(lptr) X(dstate) X(dwait) X(ddrive) \
+   X(dbyte) X(dphase) X(dlog) X(dwrite) X(dlba) X(mount_next) X(now) X(next_report) \
+   X(bus_as_prev) X(prev_vs) X(prev_hs)
+   bool saved = false;
+   if (!restore_file.empty()) {
+      VerilatedRestore is;
+      is.open(restore_file.c_str());
+      is >> *top;
+#define TB_READ(v) is.read(&v, sizeof v);
+      TB_STATE(TB_READ)
+      is.close();
+      ctx->time(now / FS_PER_PS);
+      wall0 = std::chrono::steady_clock::now();
+      printf("[%8.3f ms] restored %s\n", now / 1e12, restore_file.c_str());
+   }
+   const fs_t start_fs = now;
 
    while (now < end_fs && !ctx->gotFinish()) {
       // the next edge(s)
@@ -365,6 +395,17 @@ int main(int argc, char** argv) {
                        bus_ds & 2 ? 'U' : '-', bus_ds & 1 ? 'L' : '-');
          }
          bus_as_prev = as;
+
+         if (!save_file.empty() && !saved && save_at_ms >= 0 && now >= (fs_t)(save_at_ms * 1e12)) {
+            VerilatedSave os;
+            os.open(save_file.c_str());
+            os << *top;
+#define TB_WRITE(v) os.write(&v, sizeof v);
+            TB_STATE(TB_WRITE)
+            os.close();
+            saved = true;
+            printf("[%8.3f ms] saved %s\n", now / 1e12, save_file.c_str());
+         }
       }
 
       if (scan_rise && top->video_ce) {
@@ -415,7 +456,7 @@ int main(int argc, char** argv) {
 
       if (now >= next_report) {
          double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall0).count();
-         printf("[%8.3f ms] wall %.1f s (%.2f s per simulated ms)\n", now / 1e12, wall, wall / (now / 1e12));
+         printf("[%8.3f ms] wall %.1f s (%.2f s per simulated ms)\n", now / 1e12, wall, wall / ((now - start_fs) / 1e12));
          fflush(stdout);
          next_report += (fs_t)1e12;
       }

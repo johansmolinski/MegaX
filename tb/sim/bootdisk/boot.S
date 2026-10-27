@@ -1,7 +1,9 @@
 | MegaX simulation: a test boot sector for the X68000 (2HD, 1024 bytes).
 |
-| The IPL reads the first sector of a bootable floppy to $2000 and runs it in
-| supervisor mode with its IOCS (trap #15) set up. This one uses only the IOCS and
+| The IPL reads the first sector of a bootable floppy to $2000 (IOCS $46) and runs
+| it in supervisor mode with its IOCS (trap #15) set up, but only if its first byte
+| is $60, a BRA (IPL at FF02BE: cmpi.b #$60,(a1)); otherwise it tries the next
+| device. This one starts with a BRA over its name, uses only the IOCS and
 | the text VRAM, so a frame shows the whole path - floppy emulator, 68000, CGROM
 | font, text VRAM, palette, video - without any copyrighted disk:
 |   _CRTMOD 16 (768x512, 16 colours, 31 kHz), cursor off, a line of text at (4,4),
@@ -9,7 +11,11 @@
 | GNU as, MIT syntax: m68k-linux-gnu-as -m68000 boot.S (tb/sim/Makefile).
 
 	.text
-	.globl	start
+	.globl	entry
+entry:
+	bras	start			| $60xx: the IPL's boot sector check
+	.ascii	"MegaX boot test"
+	.even
 start:
 	moveq	#0x10,%d0		| IOCS _CRTMOD
 	moveq	#16,%d1			| mode 16: 768x512, 16 colours, 31 kHz

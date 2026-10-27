@@ -80,3 +80,26 @@ One entry per increment: what, why, test numbers, build names.
     of our own that sets the text palette and draws, so the whole path (FDC
     emulation, CPU, text VRAM, video) shows up in a frame without Sharp's IPL
     screen or any copyrighted disk.
+
+## 2026-10-27 - Disks in simulation, a boot sector of our own
+
+- `x68_system` carries MiSTer's hps_io sector interface (`img_*`, `sd_*`) and
+  X68000.sv's mount glue (mount pulse stretching, eject, re-announce after
+  reset, reset after a SASI mount, D88/XDF selection and `sd_ack` mapping; the
+  1-bit `img_readonly` reaches only bit 0 of `mist_readonly`, as on MiSTer).
+  The testbench serves it (`--fd0`, `--fd1`); the MEGA65 shell will serve the
+  same ports from the SD card.
+- Test boot disk (`tb/sim/bootdisk`): a 2HD XDF with our own boot sector (IOCS
+  _CRTMOD 16, _B_PRINT, colour bars in the text VRAM). Run `disk-b` (3 s): the
+  FDD status port reports the disk in unit 0 (E94005 = 0x80), the IPL reads
+  blocks 0 and 1 at 1.775 s - then rejects the sector: its floppy boot (FF029C)
+  reads 1024 bytes to $2000 with IOCS $46 and jumps there only if the first
+  byte is $60 (`cmpi.b #$60,(a1)` at FF02BE). It went on to ROM boot (the
+  address in SRAM ED000C, 0), executed the vector table and stopped in its
+  exception handler with 「エラーが発生しました。リセットしてください。」 (in
+  black: the text palette is still 0). The boot sector now starts with a BRA.
+- Checkpoints (`--savable`; `--save <f> --save-at <ms>`, `--restore <f>`): the
+  IPL needs 1.77 s of machine time (~33 min) before it reads a boot sector.
+- rsim.sh: rsync into a base copy on the host (an update takes < 1 s instead of
+  minutes), `setsid` as the background job (the old form kept the ssh session
+  open and `stop` missed the process group).
