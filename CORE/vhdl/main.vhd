@@ -91,6 +91,8 @@ entity main is
       sram_ld_i               : in    std_logic;
       sram_st_i               : in    std_logic;
       sxsi_inject_i           : in    std_logic;
+      dbg_status_o            : out   std_logic_vector(5 downto 0);   -- x68_dbg.vhd
+      dbg_scan_o              : out   std_logic_vector(7 downto 0);
 
       -- Audio output (clk_sys, signed PCM)
       audio_left_o            : out   signed(15 downto 0);
@@ -301,12 +303,16 @@ begin
          sram_ld        => sram_ld_i,
          sram_st        => sram_st_i,
          sxsi_inject    => sxsi_inject_i,
+         dbg_status     => dbg_status_o(4 downto 0),
          fd_motor       => fd_motor_o,
          ps2_kbd_clk_i  => kbd_clk,
          ps2_kbd_dat_i  => kbd_dat,
          ps2_kbd_clk_o  => host_clk,
          ps2_kbd_dat_o  => host_dat
       ); -- i_x68_system
+
+   dbg_status_o(5) <= scan_ready;
+   dbg_scan_o      <= scan_req & scan_mode;
 
    sdram_dqmh_o <= sd_dqm(1);
    sdram_dqml_o <= sd_dqm(0);

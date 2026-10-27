@@ -363,6 +363,9 @@ signal scan_locked            : std_logic;
 signal main_x68_reset         : std_logic := '1';
 signal main_fd_motor          : std_logic;
 signal main_boot_ended_d      : std_logic := '0';
+signal main_dbg_status        : std_logic_vector(5 downto 0);
+signal main_dbg_scan          : std_logic_vector(7 downto 0);
+signal qnice_dbg_data         : std_logic_vector(15 downto 0);
 signal main_sxsi_inject       : std_logic := '0';
 
 ---------------------------------------------------------------------------------------------
@@ -602,6 +605,8 @@ begin
          sram_ld_i            => main_osm_control_i(C_MENU_SRAM_LD),
          sram_st_i            => main_osm_control_i(C_MENU_SRAM_ST),
          sxsi_inject_i        => main_sxsi_inject,
+         dbg_status_o         => main_dbg_status,
+         dbg_scan_o           => main_dbg_scan,
 
          img_mounted_i        => main_img_mounted,
          img_readonly_i       => main_img_readonly,
@@ -678,6 +683,9 @@ begin
             qnice_dev_data_o <= qnice_boot_data;
             qnice_dev_wait_o <= qnice_boot_wait;
 
+         when C_DEV_X68_DEBUG =>
+            qnice_dev_data_o <= qnice_dbg_data;
+
          -- the disk images: device 0x0101 + slot
          when C_DEV_X68_FDD0 | C_DEV_X68_FDD1 | C_DEV_X68_SASI | C_DEV_X68_SRAM |
               C_DEV_X68_SXSI1 | C_DEV_X68_SXSI2 =>
@@ -710,6 +718,23 @@ begin
          boot_wait_i          => main_boot_wait,
          boot_ended_o         => main_boot_ended
       ); -- i_x68_boot
+
+   -- the bring-up probe (x68_dbg.vhd): the SDRAM pins' commands and data
+   i_x68_dbg : entity work.x68_dbg
+      port map (
+         clk_ram_i            => clk_ram,
+         ras_n_i              => sdram_ras_n_o,
+         cas_n_i              => sdram_cas_n_o,
+         we_n_i               => sdram_we_n_o,
+         ba_i                 => sdram_ba_o,
+         a_i                  => sdram_a_o,
+         dq_i                 => sdram_dq_io,
+         arm_i                => main_x68_reset,
+         status_i             => main_boot_active & main_dbg_status,
+         scan_i               => main_dbg_scan,
+         qnice_addr_i         => qnice_dev_addr_i,
+         qnice_data_o         => qnice_dbg_data
+      ); -- i_x68_dbg
 
    i_x68_sd : entity work.x68_sd
       port map (

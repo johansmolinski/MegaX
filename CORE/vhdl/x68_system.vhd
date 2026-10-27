@@ -108,6 +108,8 @@ port (
    sram_ld        : in    std_logic;                       -- MiSTer's "Load SRAM from SD Card" (level)
    sram_st        : in    std_logic;                       -- "Save SRAM to SD Card" (level)
    sxsi_inject    : in    std_logic;                       -- "Inject SXSI driver" (the core takes the edge)
+   dbg_status     : out   std_logic_vector(4 downto 0);    -- bring-up probe (x68_dbg.vhd): started,
+                                                           -- ldr_done, core_rstn, reset, locked
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -241,6 +243,7 @@ begin
    end process p_loader;
 
    boot_wait <= ldr_wr;
+   dbg_status <= locked & reset & core_rstn & ldr_done & started;
    ldr_aen   <= boot_active and not ldr_done;
 
    -- X68000.sv's "reset": the external one, stretched by 65535 clocks after a
