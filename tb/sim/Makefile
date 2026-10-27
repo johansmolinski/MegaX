@@ -37,7 +37,7 @@ VFLAGS := --cc --exe --build -j 0 --top-module x68_system -O3 +1364-2005ext+v --
           -Wno-fatal -Wno-WIDTH -Wno-PINMISSING -Wno-CASEINCOMPLETE -Wno-TIMESCALEMOD \
           -Wno-MULTIDRIVEN -Wno-UNOPTFLAT -Wno-LATCH -Wno-SELRANGE -Wno-IMPLICIT \
           -Wno-COMBDLY -Wno-INITIALDLY -Wno-BLKANDNBLK -Wno-STMTDLY -Wno-ASCRANGE \
-          --savable -CFLAGS "-O2" --Mdir $(OBJ)/vl -o sim
+          --savable --structs-packed -CFLAGS "-O2" --Mdir $(OBJ)/vl -o sim
 ifeq ($(TRACE),1)
 VFLAGS += --trace
 endif
