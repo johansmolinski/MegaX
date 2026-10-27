@@ -44,6 +44,9 @@ set_multicycle_path 1 -hold  -end -from [get_clocks main_clk] -to $MPU
 ## vidcont's address to the cache controller has two clocks; cacheext's srclk is not timed;
 ## the YM3802's interpolator advances every four clocks
 set_false_path -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/cont/contval*}]
+## cacheext samples its CPU-side clock (clk_sys) as data (srclk, an edge detector on the clk_ram
+## side): X68000.sdc's false path; megax-e failed hold on the 16 read-cache blocks without it
+set_false_path -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/RAM/CACHEC/*/srclk_reg*}]
 set_multicycle_path 2 -setup -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
 set_multicycle_path 1 -hold  -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
 set_multicycle_path 2 -setup -end -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/vc/vaddr*}] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/RAM/CACHEC/*}]
@@ -82,6 +85,10 @@ set SD_OUT [get_ports {sdram_cke_o sdram_cs_n_o sdram_ras_n_o sdram_cas_n_o sdra
 set_output_delay -clock sdram_clk_pin -max  [expr 1.5 + 0.5] $SD_OUT
 set_output_delay -clock sdram_clk_pin -min  [expr -0.8 + 0.1] $SD_OUT
 
+## Pin registers in the IOBs (Megamiga's SDRAM rule): short, matched clock-to-out. SDRAMC drives
+## A12/UDQM and A11/LDQM from the same register (MADDR(12), MADDR(11)), so one pin of each pair
+## may stay outside (Vivado warns); megax-c had A1's register 3 ns of routing away from its pad.
+set_property IOB TRUE $SD_OUT
 set_input_delay -clock sdram_clk_pin -max [expr 6.0 + 0.5 + 0.5] [get_ports {sdram_dq_io[*]}]
 set_input_delay -clock sdram_clk_pin -min [expr 2.5 + 0.1 + 0.1] [get_ports {sdram_dq_io[*]}]
 set_multicycle_path 2 -setup -end -from [get_clocks sdram_clk_pin] -to [get_clocks clk_ram]
