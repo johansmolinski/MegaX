@@ -10,9 +10,13 @@
 --
 -- * key events: the framework scans the 80 MEGA65 keys round-robin (key_num_i, 1000 full scans
 --   per second, key_pressed_n_i debounced and low active). Every change of a key becomes its
---   make code ([E0|E1] code) or break code ([E0|E1] F0 code) in a 32-byte FIFO. A change is
---   only taken while the FIFO has room for three bytes; otherwise it is seen again on the next
---   scan and nothing is lost.
+--   make code ([E0] code) or break code ([E0] F0 code) in a 32-byte FIFO (BREAK: the Pause
+--   key's E1 14 77 / E1 F0 14 F0 77). A change is only taken while the FIFO has room for five
+--   bytes; otherwise it is seen again on the next scan and nothing is lost.
+-- * typematic repeat, as a PS/2 keyboard does it (KBCONV turns a repeated make code into the
+--   X68000 keyboard's repeat, KS_REP): the last key pressed repeats its make code while it is
+--   held, after the delay and at the rate the host set with F3 (default 2B: 500 ms, 10.9 per
+--   second); its release, or another key's press, ends it. BREAK (E1) does not repeat.
 -- * host commands: every byte the host sends is answered with FA (acknowledge), FF additionally
 --   with AA (self-test passed), F2 with the MF2 keyboard ID AB 83. The answers go into the same
 --   FIFO as the keys (KBCONV skips stray key bytes while it waits for an answer).
@@ -54,6 +58,7 @@ use ieee.numeric_std.all;
 
 entity keyboard is
    generic (
+      C_CLK_HZ        : natural := 40_000_000; -- clk_i
       C_PS2DIV        : natural := 2400        -- the PS/2 bit clock: clk_i / (2 x (C_PS2DIV + 1))
    );
    port (
@@ -145,7 +150,7 @@ architecture synthesis of keyboard is
       60 => "00" & x"29",   -- SPACE
       61 => "01" & x"1F",   -- MEGA         -> left Windows (KBCONV's combo modifier)
       62 => "00" & x"15",   -- Q
-      63 => "10" & x"14",   -- RUN/STOP     -> BREAK (E1 14, KBCONV's E1 table)
+      63 => "10" & x"14",   -- RUN/STOP     -> BREAK (Pause: E1 14 77, KBCONV's E1 table)
       64 => "01" & x"7C",   -- NO SCROLL    -> COPY (PrtSc)
       65 => "00" & x"0D",   -- TAB
       66 => "00" & x"11",   -- ALT          -> XF2 (left Alt)
@@ -179,6 +184,19 @@ architecture synthesis of keyboard is
    end function mega_code;
 
    constant C_FIFO_LOG : natural := 5;
+
+   -- typematic delay and period (PS/2): delay = (1 + bits 6..5) x 250 ms, period =
+   -- (8 + bits 2..0) x 2 ^ bits 4..3 x 4.17 ms; in clk_i clocks
+   constant C_CLK_MS   : natural := C_CLK_HZ / 1000;
+   function tm_delay(a : std_logic_vector(7 downto 0)) return natural is
+   begin
+      return (1 + to_integer(unsigned(a(6 downto 5)))) * 250 * C_CLK_MS;
+   end function tm_delay;
+   function tm_period(a : std_logic_vector(7 downto 0)) return natural is
+   begin
+      return (8 + to_integer(unsigned(a(2 downto 0)))) * 2 ** to_integer(unsigned(a(4 downto 3))) *
+             (C_CLK_HZ / 240);        -- 4.17 ms
+   end function tm_period;
 
    type t_fifo is array (0 to 2**C_FIFO_LOG - 1) of std_logic_vector(7 downto 0);
 
@@ -217,6 +235,14 @@ architecture synthesis of keyboard is
    signal timeout   : unsigned(1 downto 0) := (others => '0');
    signal clk_out   : std_logic := '1';
    signal dat_out   : std_logic := '1';
+
+   -- typematic repeat
+   signal tm_arg    : std_logic_vector(7 downto 0) := x"2B";
+   signal tm_next   : std_logic := '0';                      -- the next host byte is F3's argument
+   signal rep_on    : std_logic := '0';
+   signal rep_num   : integer range 0 to 79 := 0;
+   signal rep_code  : t_code := (others => '0');
+   signal rep_timer : natural range 0 to 2**27 - 1 := 0;
 
 begin
 
@@ -346,20 +372,37 @@ begin
 
          v_free := v_rd - v_wr - 1;                          -- free FIFO entries
 
+         if rep_timer /= 0 then
+            rep_timer <= rep_timer - 1;
+         end if;
+
          if rx_got = '1' then
             -- a host command: acknowledge it (at most three bytes; a full FIFO drops them)
             if v_free >= 3 then
                push(x"FA");
-               if rx_data = x"FF" then
+               if tm_next = '0' and rx_data = x"FF" then
                   push(x"AA");
-               elsif rx_data = x"F2" then
+               elsif tm_next = '0' and rx_data = x"F2" then
                   push(x"AB");
                   push(x"83");
                end if;
             end if;
+            if tm_next = '1' then
+               tm_arg  <= rx_data;
+               tm_next <= '0';
+            elsif rx_data = x"F3" then
+               tm_next <= '1';
+            end if;
+         elsif rep_on = '1' and rep_timer = 0 and v_free >= 3 then
+            -- typematic repeat of the last key pressed
+            if rep_code(9 downto 8) = "01" then
+               push(x"E0");
+            end if;
+            push(rep_code(7 downto 0));
+            rep_timer <= tm_period(tm_arg);
          elsif c_lock /= 0 then
             c_lock <= c_lock - 1;
-         elsif b_pressed /= b_state and v_free >= 3 then
+         elsif b_pressed /= b_state and v_free >= 5 then
             c_lock <= 2;
             key_state(b_num) <= b_pressed;
             if b_pressed = '1' then
@@ -376,16 +419,39 @@ begin
             else
                v_code := b_map;
             end if;
-            if v_code /= "00" & x"00" then
+            if v_code(9 downto 8) = "10" then
+               -- BREAK: the Pause key's bytes, E1 14 77 / E1 F0 14 F0 77. KBCONV keeps its E1
+               -- flag after the E1 code (KS_WINT does not clear it); the trailing 77 (E1 table:
+               -- 7F, no key) clears it, else the next E0 key would be looked up in the E1 half
+               push(x"E1");
+               if b_pressed = '0' then
+                  push(x"F0");
+               end if;
+               push(v_code(7 downto 0));
+               if b_pressed = '0' then
+                  push(x"F0");
+               end if;
+               push(x"77");
+            elsif v_code /= "00" & x"00" then
                if v_code(9 downto 8) = "01" then
                   push(x"E0");
-               elsif v_code(9 downto 8) = "10" then
-                  push(x"E1");
                end if;
                if b_pressed = '0' then
                   push(x"F0");
                end if;
                push(v_code(7 downto 0));
+            end if;
+            -- typematic: a press starts it for this key, the key's release ends it
+            if b_pressed = '1' then
+               rep_on    <= '0';
+               if v_code /= "00" & x"00" and v_code(9 downto 8) /= "10" then
+                  rep_on    <= '1';
+                  rep_num   <= b_num;
+                  rep_code  <= v_code;
+                  rep_timer <= tm_delay(tm_arg);
+               end if;
+            elsif b_num = rep_num then
+               rep_on <= '0';
             end if;
          end if;
 
@@ -398,6 +464,9 @@ begin
             wr_ptr    <= (others => '0');
             rd_ptr    <= (others => '0');
             c_lock    <= 2;
+            rep_on    <= '0';
+            tm_arg    <= x"2B";
+            tm_next   <= '0';
             rx_state  <= 0;
             tx_state  <= 0;
             clk_out   <= '1';
