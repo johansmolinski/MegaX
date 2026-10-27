@@ -60,7 +60,7 @@ for cmd in args:
     # the reply: until the next prompt (a long dump takes a while), at most 30 s
     got = b""
     end = time.time() + 30
-    while time.time() < end and b"QMON>" not in got:
+    while time.time() < end and b"QMON>" not in got and not got.rstrip().endswith(b"NEW VALUE="):
         got += drain(0.2)
     sys.stdout.write(got.decode("latin1").replace("\r", ""))
     sys.stdout.flush()

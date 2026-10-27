@@ -3,18 +3,29 @@
 monitor and print it, oldest cycle first.
 
   tools/trace.py [--port /dev/ttyUSB1] [--wait <s>] [--writes] [--keep]
+  tools/trace.py [...] --arm <addr>[/<mask>] [--reset]
+  tools/trace.py [...] --status
 
 The MEGA65 must be in the Shell's debug mode (QMON>; --wait waits for it). The trace is
 frozen for the read-out and unfrozen afterwards (--keep: stays frozen). --writes: switch to
 "writes only" (and unfreeze), so that a later read shows the last 1024 write cycles.
+--arm: the trigger on a program fetch at <addr> (hex, mask default FFFFFF); the trace then
+freezes itself 64 cycles after it; --reset resets the X68000 afterwards (M2M CSR bit 0, about
+a millisecond), so the trigger catches the next boot. --status: control, fired, counters.
 """
 import os, re, subprocess, sys
 
 args = sys.argv[1:]
-qargs, writes, keep = [], False, False
+qargs, writes, keep, arm, reset, status = [], False, False, None, False, False
 while args:
     if args[0] in ("--port", "--wait"):
         qargs += args[:2]; args = args[2:]
+    elif args[0] == "--arm":
+        arm = args[1]; args = args[2:]
+    elif args[0] == "--reset":
+        reset = True; args = args[1:]
+    elif args[0] == "--status":
+        status = True; args = args[1:]
     elif args[0] == "--writes":
         writes = True; args = args[1:]
     elif args[0] == "--keep":
@@ -29,6 +40,22 @@ def qmon(cmds, extra=()):
 
 if writes:
     print(qmon(["MCFFF40110", "MCFFF50000", "MC80000002"], qargs))
+    sys.exit(0)
+if status:
+    print(qmon(["MCFFF40110", "MCFFF50000", "MD80008008"], qargs))
+    sys.exit(0)
+if arm:
+    a, _, m = arm.partition("/")
+    a, m = int(a, 16), int(m or "FFFFFF", 16)
+    print(qmon(["MCFFF40110", "MCFFF50000",
+                "MC8004%04X" % (a & 0xFFFF), "MC8005%04X" % (a >> 16),
+                "MC8006%04X" % (m & 0xFFFF), "MC8007%04X" % (m >> 16),
+                "MC80000004"], qargs))
+    if reset:
+        o = qmon(["MCFFE0"], [])          # shows the current value, waits for the new one
+        cur = int(re.search(r"CURRENT VALUE=([0-9A-F]{4})", o).group(1), 16)
+        # finish that change with the reset bit set, then clear it again
+        print(o + qmon(["%04X" % (cur | 1)], []) + qmon(["MCFFE0%04X" % (cur & 0xFFFE)], []))
     sys.exit(0)
 
 out = qmon(["MCFFF40110", "MCFFF50000", "MC80000001", "MD80008003",
