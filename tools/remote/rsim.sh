@@ -8,6 +8,8 @@
 #                                           .git, no tb/sim/obj; rsync via ~/megax-work/.base)
 #                                           and run "make -C tb/sim
 #                                           <make args>" in the background (default: run)
+#   rsim.sh from <run> <name> [make args]   a new run on a copy of <run> (its build and
+#                                           checkpoints), sources synced over it
 #   rsim.sh status <name>                   RUNNING/FINISHED and the last lines of the log
 #   rsim.sh wait <name>                     block until it has exited, print the log's tail
 #   rsim.sh fetch <name> [dest]             log + frames (as PNG) to dest
@@ -38,6 +40,19 @@ start)
     q=$(printf ' %q' "$@")
     # cd first, so that setsid itself is the background job: its pid is the new
     # session's leader (make), and nothing keeps this ssh session open
+    ssh $H "cd ~/$B/$name/tb/sim || exit 1; setsid nohup make$q > ~/$B/$name.log 2>&1 < /dev/null & echo \$! > ~/$B/$name.pid; echo started pid \$(cat ~/$B/$name.pid)"
+    ;;
+from)
+    # a new run on top of an earlier one: its build and checkpoints are reused,
+    # make rebuilds only what the current sources changed
+    base=$1 name=$2; shift 2
+    [ $# -gt 0 ] || set -- run
+    ssh $H "test -d ~/$B/$base && test ! -e ~/$B/$name" || { echo "need fedora:~/$B/$base, and no $name yet" >&2; exit 1; }
+    ssh $H "cp -a ~/$B/$base ~/$B/$name"
+    rsync -a --exclude='.git' --exclude='/tb/sim/obj*' --exclude='*.runs' \
+        --exclude='*.cache' --exclude='*.hw' --exclude='/.claude' --exclude='*.rbf' \
+        "$root/" $H:$B/$name/
+    q=$(printf ' %q' "$@")
     ssh $H "cd ~/$B/$name/tb/sim || exit 1; setsid nohup make$q > ~/$B/$name.log 2>&1 < /dev/null & echo \$! > ~/$B/$name.pid; echo started pid \$(cat ~/$B/$name.pid)"
     ;;
 status)

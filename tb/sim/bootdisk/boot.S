@@ -7,7 +7,8 @@
 | the text VRAM, so a frame shows the whole path - floppy emulator, 68000, CGROM
 | font, text VRAM, palette, video - without any copyrighted disk:
 |   _CRTMOD 16 (768x512, 16 colours, 31 kHz), text colours 0-4 set (_CRTMOD leaves
-|   them all black), cursor off, a line of text at (4,4),
+|   them all black), contrast 15 (the IPL leaves it at 0: a black screen), cursor
+|   off, a line of text at (4,4),
 |   then 64 lines of four-colour bars (text colours 0..3) from line 400.
 | GNU as, MIT syntax: m68k-linux-gnu-as -m68000 boot.S (tb/sim/Makefile).
 
@@ -29,6 +30,7 @@ start:
 	movew	#0x07c0,%a0@+		| 2 red
 	movew	#0xf800,%a0@+		| 3 green
 	movew	#0x003e,%a0@+		| 4 blue
+	moveb	#15,0xe8e001		| contrast: full (the IPL leaves it at 0)
 	moveq	#0x1f,%d0		| IOCS _B_CUROFF
 	trap	#15
 	moveq	#0x23,%d0		| IOCS _B_LOCATE (d1 = x, d2 = y)

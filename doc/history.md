@@ -103,3 +103,17 @@ One entry per increment: what, why, test numbers, build names.
 - rsim.sh: rsync into a base copy on the host (an update takes < 1 s instead of
   minutes), `setsid` as the background job (the old form kept the ssh session
   open and `stop` missed the process group).
+- **First picture (run `disk-f`, 2026-10-27):** the IPL loads our boot sector
+  at 1.775 s and jumps to it; IOCS `_CRTMOD 16` switches to 768x512 (the core
+  switches the scan clock), `_B_PRINT` draws "MegaX - X68000 for MEGA65 - boot
+  sector test" with the CGROM font, the colour bars land at line 400. Two
+  things kept the screen black: `_CRTMOD` leaves the text palette all 0, and the
+  IPL leaves the **contrast** (E8E001) at 0; the boot sector now sets both.
+  The whole path works in simulation: SDRAM controller and model, cache, IPL,
+  MFP timer interrupts, floppy controller + XDF emulator + sector interface,
+  text VRAM in block RAM behind tvram_ddr.sv, palette, compositor, contrast,
+  native-clock scanout.
+- Checkpoints work (`--structs-packed` needed: Verilator's `--savable` cannot
+  serialise fx68k's unpacked structs): `ckpt-1770.bin` (68 MB, just before the
+  boot sector read); `rsim.sh from <run> <name>` reuses a run's build and
+  checkpoints, so a boot sector change is tested in minutes, not 35.
