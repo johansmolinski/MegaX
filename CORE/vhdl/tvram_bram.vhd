@@ -18,6 +18,11 @@
 --   new command waits for it (tvram_ddr.sv never issues one meanwhile).
 -- Latency: the first qword comes two clocks after DDRAM_RD, then one per clock
 -- (the DDR3 needed tens of clocks; the controller waits on DOUT_READY only).
+-- A write reaches the RAM one clock after DDRAM_WE (registered here, so that the
+-- address of 128 RAMB36 starts at registers of this module, replicated by
+-- max_fanout; the address straight from tvram_ddr.sv was the slowest 80 MHz path of
+-- megax-j); a read that follows still sees it (it reads two clocks after its
+-- command).
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -49,6 +54,17 @@ architecture synthesis of tvram_bram is
    signal rd_issue : std_logic;
    signal rd_valid : std_logic := '0';
 
+   signal w_we     : std_logic := '0';
+   signal w_addr   : unsigned(15 downto 0);
+   signal w_din    : std_logic_vector(63 downto 0);
+   signal w_be     : std_logic_vector(7 downto 0);
+
+   attribute max_fanout : integer;
+   attribute max_fanout of raddr  : signal is 16;
+   attribute max_fanout of w_addr : signal is 16;
+   attribute max_fanout of w_we   : signal is 16;
+   attribute max_fanout of w_be   : signal is 16;
+
 begin
 
    ddram_busy <= '1' when remain /= 0 else '0';
@@ -68,14 +84,25 @@ begin
       end if;
    end process p_cmd;
 
-   -- The RAM: one port, byte write enables, registered read.
+   -- The write command, registered.
+   p_wr : process(clk)
+   begin
+      if rising_edge(clk) then
+         w_we   <= ddram_we and not rd_issue;
+         w_addr <= unsigned(ddram_addr(15 downto 0));
+         w_din  <= ddram_din;
+         w_be   <= ddram_be;
+      end if;
+   end process p_wr;
+
+   -- The RAM: a write port with byte enables, a registered read.
    p_ram : process(clk)
    begin
       if rising_edge(clk) then
-         if ddram_we = '1' and remain = 0 then
+         if w_we = '1' then
             for i in 0 to 7 loop
-               if ddram_be(i) = '1' then
-                  ram(to_integer(unsigned(ddram_addr(15 downto 0))))(i*8+7 downto i*8) <= ddram_din(i*8+7 downto i*8);
+               if w_be(i) = '1' then
+                  ram(to_integer(w_addr))(i*8+7 downto i*8) <= w_din(i*8+7 downto i*8);
                end if;
             end loop;
          end if;
