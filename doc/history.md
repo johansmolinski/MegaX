@@ -273,3 +273,35 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - **`megax-k`: OK, WNS +0.131 ns (SDRAM outputs), clk_ram +0.152, main_clk +4.08, WHS
   +0.033; 54.6k LUTs, 326 / 365 block RAM tiles. `MegaX-0.1-k-R6.cor`.** (`megax-i`, the
   same without these two changes: +0.113 ns.)
+
+## 2026-10-27 - Hardware bring-up: SDRAM phase, bus trace, the HDMI scaler at 16bpp
+
+- First loads (`megax-k`): black screen, the 68000 never got through the IPL. A probe
+  (`x68_dbg.vhd`, `tools/dbgread.py`) showed SDRAMC sampling the next word: the read hold
+  check of CORE.xdc had been one clock off (`-hold 1` showed +9.9 ns; the true slack at the
+  fast corner was -2.57 ns). Clock phase 180 -> 288 degrees, no hold multicycle (`megax-m`:
+  read +2.91 / +1.18 ns, output +1.29 / +1.03 ns). The X68000 boots the test floppy.
+- 68000 bus trace `x68_trace.vhd` (device 0x0110, 1024 cycles, trigger on a program fetch;
+  `tools/trace.py`), `tools/qmon.py` (the Shell's debug mode over the USB serial link; leave
+  it with `CR224F`).
+- `tb/sim/bootdisk/memtest.S`: 960 KB of main RAM written and read back per pass plus a CGROM
+  sum. Hardware (`megax-p`): 8 passes, 0 errors, CGROM sum 8511 every pass.
+- HDMI only (VGA clean): red snow on the text, and at 720p60 a picture jumping vertically
+  with a band of noise for ~2 s every ~8 s. `tb/sim/bootdisk/vidtest.S` (palette, contrast
+  and text colour toggles) narrowed the snow to a byte shift in the scaler's 24bpp data
+  (green text gave red snow, blue text green snow); not electrical (SDRAM pins at 8 / 4 mA
+  SLOW, `megax-s` / `megax-t`, no change; reverted). `tools/hrdump.py` read ascal's frame
+  buffer through QMON: every corrupted 16-byte word was the word 256 bytes later in the same
+  line (ascal's two-burst input buffer overrun: 768 dots at 34.776 MHz x 3 bytes fill a
+  burst in 1.23 us, a HyperRAM write behind an HDMI read burst takes ~1.6 us), while 36,864
+  QMON reads of a test pattern elsewhere in HyperRAM were clean. `tools/ascalpoll.py`: the
+  scaler's input measurements stay at 768 x 512, 31.5 kHz (31,500.1 Hz lines against
+  720p's 45 kHz: a 7:10 ratio drifting once per ~9 s, the rhythm of the jumping).
+- Fix: framework exception `M2M-UPSTREAM ascal-16bpp` (`doc/m2m-provenance.md`), on via
+  `globals.vhd` `ASCAL_16BPP`: the picture in HyperRAM as 16bpp 565 (1.84 us per burst, a
+  third less traffic). **`megax-u`: OK, WNS +0.107 ns, WHS +0.034 ns. Hardware: no snow, no
+  jumping at 720p60, colours unchanged.**
+- Still open: the ROM debugger instead of the boot at some first loads (the IPL's OPT.2 /
+  SRAM `$80E` check); the scaler shows its unwritten buffers' power-up noise for ~2 s until
+  the X68000's scanout starts.
+

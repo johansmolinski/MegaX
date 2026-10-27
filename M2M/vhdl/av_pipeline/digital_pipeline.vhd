@@ -26,7 +26,10 @@ entity digital_pipeline is
       G_VGA_DY               : natural;
       G_FONT_FILE            : string;
       G_FONT_DX              : natural;
-      G_FONT_DY              : natural
+      G_FONT_DY              : natural;
+      -- M2M-UPSTREAM ascal-16bpp (MegaX 2026-10-27): the core's picture in HyperRAM as 16bpp 565
+      -- instead of 24bpp (fewer bytes per input burst and per frame; see av_pipeline.vhd)
+      G_ASCAL_16BPP          : boolean := false
    );
    port (
       -- Input from Core (video and audio)
@@ -207,6 +210,20 @@ architecture synthesis of digital_pipeline is
    signal hr_wide_readdata       : std_logic_vector(C_AVM_DATA_SIZE-1 downto 0);
    signal hr_wide_readdatavalid  : std_logic;
    signal hr_wide_waitrequest    : std_logic;
+
+
+   -- M2M-UPSTREAM ascal-16bpp: bytes per pixel and ascal's format input
+   function f_ascal_bpp(b16 : boolean) return natural is
+   begin
+      if b16 then return 2; end if;
+      return 3;
+   end function f_ascal_bpp;
+
+   function f_ascal_format(b16 : boolean) return unsigned is
+   begin
+      if b16 then return "00"; end if;    -- 16bpp 565
+      return "01";                        -- 24bpp
+   end function f_ascal_format;
 
 begin
 
@@ -403,7 +420,9 @@ begin
 
          -- ascal needs an input buffer according to this formula: dx * dy * 3 bytes (RGB) per pixel and then rounded up
          -- to the next power of two
-         RAMSIZE   => to_unsigned(2**f_log2(G_VGA_DX * G_VGA_DY * 3), 32),
+         -- M2M-UPSTREAM ascal-16bpp: 2 bytes per pixel in 16bpp. Original:
+         -- RAMSIZE   => to_unsigned(2**f_log2(G_VGA_DX * G_VGA_DY * 3), 32),
+         RAMSIZE   => to_unsigned(2**f_log2(G_VGA_DX * G_VGA_DY * f_ascal_bpp(G_ASCAL_16BPP)), 32),
 
          -- M2M-UPSTREAM interlace (AExp 2026-07-04): autodetect interlaced input from
          -- i_fl toggling and weave both fields into a double-height framebuffer.
@@ -528,7 +547,8 @@ begin
          vmax              => hdmi_vmax_base,               -- input
 
          -- Scaler format. 00=16bpp 565, 01=24bpp 10=32bpp
-         format            => "01",                         -- input: 24bpp
+         -- M2M-UPSTREAM ascal-16bpp. Original: format => "01", -- input: 24bpp
+         format            => f_ascal_format(G_ASCAL_16BPP),
 
          -- Polyphase filter coefficients (not used by us)
          poly_clk          => qnice_poly_clk_i,             -- input

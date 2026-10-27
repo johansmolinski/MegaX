@@ -823,7 +823,9 @@ begin
          G_VGA_DY            => G_VGA_DY,
          G_FONT_FILE         => G_FONT_FILE,
          G_FONT_DX           => G_FONT_DX,
-         G_FONT_DY           => G_FONT_DY
+         G_FONT_DY           => G_FONT_DY,
+         -- M2M-UPSTREAM ascal-16bpp (MegaX 2026-10-27): globals.vhd's ASCAL_16BPP
+         G_ASCAL_16BPP       => ASCAL_16BPP
       )
       port map (
          -- Input from Core (video and audio)

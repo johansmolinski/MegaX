@@ -53,11 +53,22 @@ constant QNICE_CLK_SPEED      : natural := 50_000_000;   -- a change here has de
 
 -- The On-Screen-Menu canvas: CHARS_DX x CHARS_DY = 768/16 x 512/16 = 48 x 32 characters. 768 x 512
 -- is the X68000's main 31 kHz picture (the IPL, Human68k: CRTC mode 6, 34.776 MHz dots). It also
--- sizes ascal's input buffer in HyperRAM (digital_pipeline.vhd: 2**ceil(log2(768 x 512 x 3)) = 2 MB).
+-- sizes ascal's input buffer in HyperRAM (digital_pipeline.vhd: 2**ceil(log2(768 x 512 x 2)) = 1 MB at
+-- 16bpp, ASCAL_16BPP below).
 -- On HDMI the overlay is right-shifted by H_PIXELS - VGA_DX (1280 - 768 for 720p; the 720-pixel
 -- 480p/576p modes are therefore not offered).
 constant VGA_DX               : natural := 768;
 constant VGA_DY               : natural := 512;
+
+-- ascal keeps the picture in HyperRAM as 16bpp 565 instead of 24bpp (M2M-UPSTREAM ascal-16bpp,
+-- doc/m2m-provenance.md). At 24bpp the X68000's 34.776 MHz dots fill ascal's two-burst input buffer
+-- (2 x 128 bytes) in 1.23 us per burst, less than a HyperRAM write that waits for an HDMI read burst
+-- (~1.6 us): bursts were overwritten before they were written out (red/green snow, megax-p/s:
+-- every bad 16-byte word in the frame buffer was the word 256 bytes later in the same line,
+-- tools/hrdump.py), and at 720p 60 Hz the load made the scaler lose the top of the frame (a picture
+-- jumping vertically for ~2 s every ~8 s). 16bpp: 1.84 us per burst, a third less traffic. The
+-- X68000's 5 bits per colour plus the intensity bit lose only the intensity bit of red and blue.
+constant ASCAL_16BPP          : boolean := true;
 
 -- The X68000's 31 kHz modes need no scandoubler; the analog output takes the picture as it is
 -- (mega65.vhd: qnice_scandoubler_o = '0'). The plain line doubler stays selected for later 15 kHz

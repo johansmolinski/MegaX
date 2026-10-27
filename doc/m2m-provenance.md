@@ -27,4 +27,12 @@ Rules:
 
 ## Framework exceptions of this core
 
-None yet.
+- **ascal-16bpp** (2026-10-27; `vhdl/av_pipeline/digital_pipeline.vhd`,
+  `vhdl/av_pipeline/av_pipeline.vhd`): a generic `G_ASCAL_16BPP` (default false
+  = the framework's 24bpp) that stores the core's picture in HyperRAM as ascal's
+  16bpp 565 format, with RAMSIZE for 2 bytes per pixel; av_pipeline sets it from
+  `globals.vhd`'s `ASCAL_16BPP`. Why: the X68000's 768-dot lines at 34.776 MHz
+  overran ascal's two-burst input buffer at 24bpp (corrupted bursts in the frame
+  buffer, seen as red snow) and loaded the HyperRAM so much that at 720p60 the
+  scaler lost the top of the frame every few seconds (`doc/history.md`,
+  2026-10-27).

@@ -143,7 +143,7 @@ constant JOY_2_AT_RESET    : boolean := false;
 constant KEYBOARD_AT_OSD   : boolean := false;
 constant JOY_1_AT_OSD      : boolean := false;
 constant JOY_2_AT_OSD      : boolean := false;
-constant ASCAL_USAGE       : natural := 2;   -- 2 = AUSE_DIRECT: ascal mode from ASCAL_MODE below
+constant ASCAL_USAGE       : natural := 2;   -- 2 = M2M$CFG_AUSE_AUTO: ascal mode = mega65.vhd's qnice_ascal_*_o (nearest, no triple buffering)
 constant ASCAL_MODE        : natural := 0;   -- nearest neighbour
 constant SAVE_SETTINGS     : boolean := true;
 constant VD_ANTI_THRASHING_DELAY : natural := 2000;
