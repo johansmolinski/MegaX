@@ -59,7 +59,9 @@ names).
    .xpr SFType tokens only `VHDL2008`, `SVerilog` or none (anything else
    segfaults Vivado); video into the framework with active-high syncs and
    blanks covering syncs; check the timing summary after every build; build
-   incrementally where possible; never stop a running build without asking.
+   incrementally where possible; never stop a running build without asking,
+   except our own builds that are certain to fail (the user, 2026-10-27: "Whenever a
+   build is expected to fail, don't ask to abort. Just abort.").
 8. **Do not touch Megamiga's main checkout** (`~/git/pub/AExp`): peer sessions
    work in it. Read from it with `git show`/`git archive`.
 
