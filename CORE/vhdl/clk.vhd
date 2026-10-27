@@ -11,7 +11,11 @@
 --                                                main.vhd; G_SDRAM_PHASE degrees behind clk_ram
 --    As on the MiSTer (one PLL, X68000.sv): the rising edges of clk_sys coincide with every
 --    other rising edge of clk_ram, the core's 80/40 MHz paths rely on it (CORE.xdc). The SDRAM
---    clock is clk_ram inverted on the MiSTer (altddio_out); 180 degrees here is the same edge.
+--    clock is clk_ram inverted on the MiSTer (altddio_out, 180 degrees); the MiSTer board's
+--    delays then put the chip's read data where SDRAMC samples it. The MEGA65's are shorter:
+--    at 180 degrees the read hold fails by 2.57 ns at the fast corner (megax-k: the X68000
+--    never got through its IPL). 288 degrees (3.75 ns later) balances read setup/hold and
+--    command setup/hold at about 1 ns each (Vivado checks all four, CORE.xdc).
 --
 -- i_clk_scan (VCO 1165 MHz = 100 MHz / 5 x 58.25):
 --    clk_scan  = 1165 / 16.75 = 69.552239 MHz (+3.6 ppm)   CLKOUT0
@@ -35,7 +39,7 @@ use xpm.vcomponents.all;
 
 entity clk is
    generic (
-      G_SDRAM_PHASE   : real := 180.0    -- clk_sdram behind clk_ram, degrees (multiple of 45/8)
+      G_SDRAM_PHASE   : real := 288.0    -- clk_sdram behind clk_ram, degrees (multiple of 4.5)
    );
    port (
       sys_clk_i       : in  std_logic;   -- expects 100 MHz

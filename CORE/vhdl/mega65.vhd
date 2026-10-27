@@ -527,7 +527,7 @@ begin
          sys_clk_i         => clk_i,           -- expects 100 MHz
          clk_ram_o         => clk_ram,         -- 80 MHz
          clk_sys_o         => main_clk,        -- 40 MHz
-         clk_sdram_o       => clk_sdram,       -- 80 MHz, 180 degrees
+         clk_sdram_o       => clk_sdram,       -- 80 MHz, 288 degrees
          x68_locked_o      => open,
          sys_rst_o         => main_rst,
          clk_scan_o        => video_clk,       -- 69.552 MHz
@@ -719,22 +719,9 @@ begin
          boot_ended_o         => main_boot_ended
       ); -- i_x68_boot
 
-   -- the bring-up probe (x68_dbg.vhd): the SDRAM pins' commands and data
-   i_x68_dbg : entity work.x68_dbg
-      port map (
-         clk_ram_i            => clk_ram,
-         ras_n_i              => sdram_ras_n_o,
-         cas_n_i              => sdram_cas_n_o,
-         we_n_i               => sdram_we_n_o,
-         ba_i                 => sdram_ba_o,
-         a_i                  => sdram_a_o,
-         dq_i                 => sdram_dq_io,
-         arm_i                => main_x68_reset,
-         status_i             => main_boot_active & main_dbg_status,
-         scan_i               => main_dbg_scan,
-         qnice_addr_i         => qnice_dev_addr_i,
-         qnice_data_o         => qnice_dbg_data
-      ); -- i_x68_dbg
+   -- the bring-up probe (x68_dbg.vhd) is not built in: its taps of the SDRAM pin signals take
+   -- the pins' registers out of the IOBs (and the DQ pads cannot be read in the fabric)
+   qnice_dbg_data <= x"0000";
 
    i_x68_sd : entity work.x68_sd
       port map (

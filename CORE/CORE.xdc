@@ -81,7 +81,11 @@ set_max_delay -datapath_only 13.400 \
 ## sampled by the chip on the next sdram_clk edge, half a period later. Read data: the chip
 ## starts driving the word of a READ tAC after the second sdram_clk edge after the command and
 ## holds it until tOH after the third; SDRAMC samples it on the clk_ram edge three clocks after
-## the command, i.e. two clk_ram clocks after the launching sdram_clk edge (multicycle 2).
+## the command, i.e. two clk_ram clocks after the launching sdram_clk edge (multicycle 2 for
+## setup; hold stays at its default: the NEXT word, launched one period later, must not reach
+## the register before that sample. Until megax-l a "-hold 1" here checked one clock early and
+## showed +9.9 ns; the true hold slack of megax-k was -2.57 ns at the fast corner: the
+## controller could sample the next word, and the X68000 never got through its IPL).
 ## Datasheet (-7, CL2): tAC 6.0 ns max, tOH 2.7 ns min (2.5 used), tIS 1.5 ns, tIH 0.8 ns; board
 ## traces 0.1 .. 0.5 ns.
 create_generated_clock -name sdram_clk_pin -source [get_pins CORE/i_main/i_sdram_clk/C] -multiply_by 1 [get_ports sdram_clk_o]
@@ -97,7 +101,6 @@ set_property IOB TRUE $SD_OUT
 set_input_delay -clock sdram_clk_pin -max [expr 6.0 + 0.5 + 0.5] [get_ports {sdram_dq_io[*]}]
 set_input_delay -clock sdram_clk_pin -min [expr 2.5 + 0.1 + 0.1] [get_ports {sdram_dq_io[*]}]
 set_multicycle_path 2 -setup -end -from [get_clocks sdram_clk_pin] -to [get_clocks clk_ram]
-set_multicycle_path 1 -hold  -end -from [get_clocks sdram_clk_pin] -to [get_clocks clk_ram]
 
 ## M2M-UPSTREAM sd-host: the native 4-bit SD bus needs pull-ups on CMD and DAT0..DAT3 of both
 ## slots. Port names are the SPI ones of the board XDCs: mosi = CMD, miso = DAT0, reset = DAT3.
