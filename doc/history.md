@@ -246,3 +246,15 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - The Fedora host's /home was full (727 of 730 GB, nearly all outside MegaX): a Verilator
   build failed with "No space left on device". Obsolete runs and builds deleted (2.2 GB
   free); `megax-f` and the phase 1 checkpoint (`disk-e`) kept.
+
+## 2026-10-27 - Code banks; the images across power-off
+
+- Firmware ROM: Megamiga's code banks (the user: "expand the ROM size like Megamiga has
+  done it"): `QNICE_CODE_BANKS` = `m2m-banks.rom` (8 x 4K words behind 0x9000-0x9FFF, 16
+  RAMB36), `make_banks.py` copied from Megamiga, `FAR_CALL` and its stubs in the fixed ROM.
+  The FAT32 write layer moved to banks 0/1: fixed ROM 32057 -> 27715 of 32768 words.
+- `x68_img.asm` (bank 2): the settings file remembers every image line's path
+  (`fdd0=SD1:/megax/...`, also fdd1, sasi, sxsi1, sxsi2, sram); PREP_START mounts them again
+  before the X68000 leaves reset; a path that no longer works shows its reason for 5 s and
+  is forgotten. PC10-III's pc_hdc.asm for six lines.
+- The user freed space on the Fedora host (15 GB free).
