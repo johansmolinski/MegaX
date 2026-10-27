@@ -12,15 +12,15 @@
 ; arrived, ends the load and waits until the X68000 has taken the last byte;
 ; the core then lets its 68000 run.
 ;
-; The floppy images: menu lines FDD0 and FDD1 hand the chosen file to
-; x68_sd.vhd (PREP_LOAD_IMAGE, FD_SETUP), which serves its sectors to the core
-; straight from the SD card.
+; The disk images: the menu's image lines (FDD0, FDD1, SASI, SxSI 1/2, SRAM)
+; hand the chosen file to x68_sd.vhd (PREP_LOAD_IMAGE, FD_SETUP), which serves
+; its sectors to the core straight from the SD card.
 ;
 ; Callbacks the Megamiga fork's Shell needs on top of the M2M template's:
 ; HANDLE_CORE_IO (core-io-hook), BROWSE_EXTRA (cfg-strings), CFG_SIGCHECK and
-; CFG_SIGSET (the settings file signature); the FAT32 write layer (the Shell
-; creates and resizes the settings file with it) is included flat, through
-; fat32_wglue.asm, so there are no code banks (QNICE_CODE_BANKS = "").
+; CFG_SIGSET (the settings file signature). The FAT32 write layer (the Shell
+; creates and resizes the settings file with it) is in two code banks behind
+; FAR_CALL stubs, as in Megamiga (QNICE_CODE_BANKS, make_banks.py).
 ;
 ; done by Johan Smolinski in 2026, after PC10-III's m2m-rom.asm (the
 ; MiSTer2MEGA65 template, sy2002 and MJoergen, and the Megamiga firmware)
@@ -621,19 +621,116 @@ CFG_SIG_KEY     .ASCII_W "menu"
 CFG_SIG_VAL     .ASCII_W "3"
 
 ; ----------------------------------------------------------------------------
-; The FAT32 write layer, flat (the Shell creates and resizes the settings
-; file with it)
+; The FAT32 write layer (the Shell creates and resizes the settings file with
+; it) lives in two code banks, as in Megamiga: the core (fat32_write.asm) in
+; BANK_F32W, writing files (fat32_wfile.asm) in BANK_F32F. These are its entry
+; points in the fixed ROM (the names fat32_wglue.asm gives a flat program).
 ; ----------------------------------------------------------------------------
 
-#include "../../M2M/QNICE/monitor/fat32_wglue.asm"
-#include "../../M2M/QNICE/monitor/fat32_write.asm"
-#include "../../M2M/QNICE/monitor/fat32_wfile.asm"
+; public: the core
+FAT32$W_CREATE  RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_CREATE
+FAT32$W_DELETE  RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_DELETE
+FAT32$W_SETDE   RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_SETDE
+FAT32$W_MKDIR   RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_MKDIR
+FAT32$W_RENAME  RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_RENAME
+; public: writing files
+FAT32$W_FDH     RSUB    FAR_CALL, 1
+                .DW     BANK_F32F, _F32W_FDH
+FAT32$W_PUT     RSUB    FAR_CALL, 1
+                .DW     BANK_F32F, _F32W_PUT
+FAT32$W_ADV     RSUB    FAR_CALL, 1
+                .DW     BANK_F32F, _F32W_ADV
+FAT32$W_SYNC    RSUB    FAR_CALL, 1
+                .DW     BANK_F32F, _F32W_SYNC
+FAT32$W_SETSIZE RSUB    FAR_CALL, 1
+                .DW     BANK_F32F, _F32W_SETSIZE
+; the core routines that the file part (another bank) uses
+_F32WX_BEGIN    RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_BEGIN
+_F32WX_END      RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_END
+_F32WX_SCAN     RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_SCAN
+_F32WX_FATGET   RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_FATGET
+_F32WX_FATSET   RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_FATSET
+_F32WX_ISDATA   RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_ISDATA
+_F32WX_ALLOC    RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_ALLOC
+_F32WX_FREE     RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_FREE
+_F32WX_ZEROCL   RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_ZEROCL
+_F32WX_CLSEC    RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_CLSEC
+_F32WX_SEC      RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_SEC
+_F32WX_SETDE    RSUB    FAR_CALL, 1
+                .DW     BANK_F32W, _F32W_SETDE
+
+; ----------------------------------------------------------------------------
+; FAR_CALL: call a routine in a code bank (Megamiga's, M2M-UPSTREAM
+; code-banks).
+;
+; The QNICE address space is 64K words, so code that does not fit into the
+; 32K-word ROM lives in code banks: 4K-word banks that M2M$CODE_BANK shows in
+; the window M2M$CODE_WIN (0x9000-0x9FFF). An entry point of a bank is a stub
+; in the fixed ROM:
+;
+;   NAME            RSUB    FAR_CALL, 1
+;                   .DW     <bank>, <address in the window>
+;
+; FAR_CALL selects the bank, calls the routine and selects the bank of the
+; caller again, then returns to the caller of the stub. R8..R12 and the Carry
+; pass through both ways (the other flags do not); the stack holds one word
+; more during the call. Code in a bank may call the fixed ROM directly but
+; never another bank (only through a stub); the fixed ROM never calls into a
+; bank except through a stub.
+; ----------------------------------------------------------------------------
+
+FAR_CALL        INCRB
+                MOVE    @SP++, R0               ; R0: the two words of the stub
+                MOVE    M2M$CODE_BANK, R3
+                MOVE    @R3, R4                 ; R4: the bank of the caller
+                MOVE    @R0++, @R3              ; select the bank
+                MOVE    @R0, R0
+                ASUB    R0, 1
+                MOVE    R4, @R3                 ; the caller's bank again
+                DECRB
+                RET
 
 ; ----------------------------------------------------------------------------
 ; END_OF_ROM must stay the last ROM item (make_rom.sh checks it)
 ; ----------------------------------------------------------------------------
 
 END_OF_ROM      .DW 0
+
+; ----------------------------------------------------------------------------
+; Code banks (Megamiga's M2M-UPSTREAM code-banks, see FAR_CALL): each bank is a
+; section that starts with ".ORG 0x9000" (M2M$CODE_WIN) and its marker word
+; 0x4B00 + n, bank n in source order. make_rom.sh (make_banks.py) writes them
+; into m2m-banks.rom and checks the markers.
+; ----------------------------------------------------------------------------
+
+BANK_F32W       .EQU    0                       ; FAT32 write layer: core
+BANK_F32F       .EQU    1                       ; FAT32 write layer: files
+
+#ifdef RELEASE
+                .ORG    0x9000                  ; M2M$CODE_WIN (.ORG takes no symbol)
+                .DW     0x4B00                  ; bank 0: BANK_F32W
+#include "../../M2M/QNICE/monitor/fat32_write.asm"
+
+                .ORG    0x9000                  ; M2M$CODE_WIN
+                .DW     0x4B01                  ; bank 1: BANK_F32F
+#include "../../M2M/QNICE/monitor/fat32_wfile.asm"
+#endif
 
 ; ----------------------------------------------------------------------------
 ; Variables: Need to be located in RAM
@@ -643,7 +740,7 @@ END_OF_ROM      .DW 0
                 .ORG    0xA000                  ; RAM starts at 0xA000: the 4k device
                                                 ; window takes 0x8000-0x8FFF (M2M-UPSTREAM
                                                 ; rom-32k), the code window 0x9000-0x9FFF
-                                                ; (code-banks; unused here)
+                                                ; (code-banks)
 #endif
 
 #include "../../M2M/rom/shell_vars.asm"
