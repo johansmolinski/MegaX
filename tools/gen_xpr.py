@@ -20,7 +20,7 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 # the MEGA65 shell (CORE/vhdl), in compile order after the machine
 SHELL = ["vhdl/globals.vhd", "vhdl/config.vhd", "vhdl/clk.vhd", "vhdl/keyboard.vhd",
-         "vhdl/x68_boot.vhd", "vhdl/x68_sd.vhd", "vhdl/x68_dbg.vhd", "vhdl/main.vhd", "vhdl/mega65.vhd"]
+         "vhdl/x68_boot.vhd", "vhdl/x68_sd.vhd", "vhdl/x68_trace.vhd", "vhdl/main.vhd", "vhdl/mega65.vhd"]
 
 
 def sftype(path):

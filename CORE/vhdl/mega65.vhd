@@ -365,7 +365,10 @@ signal main_fd_motor          : std_logic;
 signal main_boot_ended_d      : std_logic := '0';
 signal main_dbg_status        : std_logic_vector(5 downto 0);
 signal main_dbg_scan          : std_logic_vector(7 downto 0);
+signal main_dbg_bus           : std_logic_vector(47 downto 0);
 signal qnice_dbg_data         : std_logic_vector(15 downto 0);
+signal qnice_dbg_ce           : std_logic;
+signal qnice_dbg_we           : std_logic;
 signal main_sxsi_inject       : std_logic := '0';
 
 ---------------------------------------------------------------------------------------------
@@ -607,6 +610,7 @@ begin
          sxsi_inject_i        => main_sxsi_inject,
          dbg_status_o         => main_dbg_status,
          dbg_scan_o           => main_dbg_scan,
+         dbg_bus_o            => main_dbg_bus,
 
          img_mounted_i        => main_img_mounted,
          img_readonly_i       => main_img_readonly,
@@ -675,6 +679,8 @@ begin
       qnice_sd_ce      <= '0';
       qnice_sd_we      <= '0';
       qnice_sd_slot    <= "000";
+      qnice_dbg_ce     <= '0';
+      qnice_dbg_we     <= '0';
 
       case qnice_dev_id_i is
          when C_DEV_X68_BOOT =>
@@ -684,6 +690,8 @@ begin
             qnice_dev_wait_o <= qnice_boot_wait;
 
          when C_DEV_X68_DEBUG =>
+            qnice_dbg_ce     <= qnice_dev_ce_i;
+            qnice_dbg_we     <= qnice_dev_we_i;
             qnice_dev_data_o <= qnice_dbg_data;
 
          -- the disk images: device 0x0101 + slot
@@ -719,9 +727,18 @@ begin
          boot_ended_o         => main_boot_ended
       ); -- i_x68_boot
 
-   -- the bring-up probe (x68_dbg.vhd) is not built in: its taps of the SDRAM pin signals take
-   -- the pins' registers out of the IOBs (and the DQ pads cannot be read in the fabric)
-   qnice_dbg_data <= x"0000";
+   -- the 68000 bus trace for the bring-up (x68_trace.vhd, QNICE device C_DEV_X68_DEBUG)
+   i_x68_trace : entity work.x68_trace
+      port map (
+         clk_sys_i            => main_clk,
+         bus_i                => main_dbg_bus,
+         qnice_clk_i          => qnice_clk_i,
+         qnice_addr_i         => qnice_dev_addr_i,
+         qnice_data_i         => qnice_dev_data_i,
+         qnice_data_o         => qnice_dbg_data,
+         qnice_ce_i           => qnice_dbg_ce,
+         qnice_we_i           => qnice_dbg_we
+      ); -- i_x68_trace
 
    i_x68_sd : entity work.x68_sd
       port map (

@@ -61,11 +61,6 @@ set_multicycle_path 3 -hold  -end -from [get_clocks main_clk] -to [get_cells -hi
 set_max_delay -datapath_only 20.000 -from [get_clocks qnice_clk] -to [get_clocks {main_clk clk_scan}]
 set_max_delay -datapath_only 20.000 -from [get_clocks {main_clk clk_scan}] -to [get_clocks qnice_clk]
 
-## The bring-up probe (x68_dbg.vhd): QNICE reads its clk_ram registers as they are (debug values,
-## read twice); its arm and status inputs are asynchronous
-set_false_path -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_x68_dbg/*}] -to [get_clocks qnice_clk]
-set_false_path -to [get_cells -hierarchical -filter {NAME =~ CORE/i_x68_dbg/arm_s_reg[0]}]
-
 ## ascal asynchronous FIFO data crossings (PC10-III/Megamiga CORE.xdc, framework paths): i_dpram
 ## is written on i_clk (= clk_scan) and read on avl_clk (= hr_clk), o_dpram is written on avl_clk
 ## and read on o_clk (= hdmi_clk). Bound the LUTRAM paths to one destination period.

@@ -100,8 +100,8 @@ constant C_DEV_X68_SASI       : std_logic_vector(15 downto 0) := x"0103";
 constant C_DEV_X68_SRAM       : std_logic_vector(15 downto 0) := x"0104";
 constant C_DEV_X68_SXSI1      : std_logic_vector(15 downto 0) := x"0105";
 constant C_DEV_X68_SXSI2      : std_logic_vector(15 downto 0) := x"0106";
--- The bring-up probe (x68_dbg.vhd): SDRAM command counters, the first 64 reads after the reset,
--- status bits; read with the QNICE monitor (tools/qmon.py)
+-- The 68000 bus trace for the bring-up (x68_trace.vhd): the last 1024 bus cycles; read with the
+-- QNICE monitor (tools/trace.py)
 constant C_DEV_X68_DEBUG      : std_logic_vector(15 downto 0) := x"0110";
 
 ----------------------------------------------------------------------------------------------------------

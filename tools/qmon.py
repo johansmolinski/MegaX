@@ -57,6 +57,11 @@ for cmd in args:
     for ch in cmd:
         os.write(fd, ch.encode())
         time.sleep(0.02)
-    sys.stdout.write(drain(0.6).decode("latin1").replace("\r", ""))
+    # the reply: until the next prompt (a long dump takes a while), at most 30 s
+    got = b""
+    end = time.time() + 30
+    while time.time() < end and b"QMON>" not in got:
+        got += drain(0.2)
+    sys.stdout.write(got.decode("latin1").replace("\r", ""))
     sys.stdout.flush()
 os.close(fd)

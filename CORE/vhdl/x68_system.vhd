@@ -108,8 +108,9 @@ port (
    sram_ld        : in    std_logic;                       -- MiSTer's "Load SRAM from SD Card" (level)
    sram_st        : in    std_logic;                       -- "Save SRAM to SD Card" (level)
    sxsi_inject    : in    std_logic;                       -- "Inject SXSI driver" (the core takes the edge)
-   dbg_status     : out   std_logic_vector(4 downto 0);    -- bring-up probe (x68_dbg.vhd): started,
-                                                           -- ldr_done, core_rstn, reset, locked
+   dbg_status     : out   std_logic_vector(4 downto 0);    -- bring-up: started, ldr_done,
+                                                           -- core_rstn, reset, locked
+   dbg_bus        : out   std_logic_vector(47 downto 0);   -- the 68000's bus (x68_trace.vhd)
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -439,7 +440,8 @@ begin
       mix_fix          => '1',
       disk_mode        => disk_mode,
       sxsi_inject      => sxsi_inject,
-      vis_mem          => "0000"
+      vis_mem          => "0000",
+      dbg_bus          => dbg_bus
    );
 
    -- X68000.sv swaps the channels on purpose (pSndL => aud_r).
