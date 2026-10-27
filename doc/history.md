@@ -227,3 +227,22 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   out of the IOBs (SDRAMC drives all 16 output enables from one register). 54.1k LUTs
   (40 %), 313 / 365 block RAM tiles. `tools/make_cor.sh` -> `MegaX-0.1-f-R6.cor`. Not yet
   tried on the hardware.
+
+## 2026-10-27 - Phase 3: hard disks, SRAM, eject, D88 write-back
+
+- The menu (signature 3) has image lines for MiSTer's slots: FDD0, FDD1, SASI (.HDF),
+  SxSI 1 and 2 (.HDS), SRAM (16 KB), one QNICE device per slot (0x0101 + slot), all
+  through x68_sd.vhd. The firmware checks the size per kind and refuses an image with
+  more than 127 extents (the map size; hard disk images should be contiguous).
+- SPACE on a mounted image line ejects it (PC10-III's HANDLE_CORE_IO): the slot off, which
+  x68_sd.vhd turns into hps_io's unmount (img_mounted with size 0).
+- A "Disks and SRAM" submenu with MiSTer's momentary options: Save FDD0/FDD1 changes (D88,
+  `fd_sync`), Load/Save SRAM (`pSramld/pSramst`), Inject SxSI driver (`sxsi_inject`) -
+  held for ~10 ms by the firmware, the core samples them as levels like MiSTer's "R"
+  options - and "SxSI driver at power-on" (one pulse once the boot ROM is in, MiSTer's
+  sxsi_boot_pulse).
+- Firmware: 32057 of 32768 ROM words; persistence of the mounted images (as PC10-III's
+  hard disk) will need code banks.
+- The Fedora host's /home was full (727 of 730 GB, nearly all outside MegaX): a Verilator
+  build failed with "No space left on device". Obsolete runs and builds deleted (2.2 GB
+  free); `megax-f` and the phase 1 checkpoint (`disk-e`) kept.
