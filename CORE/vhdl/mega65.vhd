@@ -360,6 +360,7 @@ signal video_clk              : std_logic;             -- clk_scan
 signal main_rst               : std_logic;
 signal video_rst              : std_logic;
 signal scan_locked            : std_logic;
+signal scan_sel               : std_logic_vector(1 downto 0);
 signal main_x68_reset         : std_logic := '1';
 signal main_fd_motor          : std_logic;
 signal main_boot_ended_d      : std_logic := '0';
@@ -533,7 +534,8 @@ begin
          clk_sdram_o       => clk_sdram,       -- 80 MHz, 288 degrees
          x68_locked_o      => open,
          sys_rst_o         => main_rst,
-         clk_scan_o        => video_clk,       -- 69.552 MHz
+         scan_sel_i        => scan_sel,        -- the oscillator family (main.vhd)
+         clk_scan_o        => video_clk,       -- 69.552 / 38.864 / 50.35 / 75.249 MHz
          scan_locked_o     => scan_locked,
          scan_rst_o        => video_rst
       ); -- clk_gen
@@ -583,6 +585,7 @@ begin
          clk_scan_i           => video_clk,
          sys_rst_i            => main_rst,
          scan_locked_i        => scan_locked,
+         scan_sel_o           => scan_sel,
          reset_i              => main_x68_reset,
          turbo_i              => main_osm_control_i(C_MENU_TURBO),
          rtc_i                => main_rtc_i,

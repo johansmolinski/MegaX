@@ -12,6 +12,10 @@ package vcomponents is
       port (O : out std_logic; I : in std_logic);
    end component;
 
+   component BUFGMUX_CTRL is
+      port (O : out std_logic; I0 : in std_logic; I1 : in std_logic; S : in std_logic);
+   end component;
+
    component ODDR is
       generic (
          DDR_CLK_EDGE : string := "OPPOSITE_EDGE";
@@ -103,6 +107,19 @@ end entity;
 architecture sim of BUFG is
 begin
    O <= I;
+end architecture;
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+-- no glitch-free switching: the select takes effect at once
+entity BUFGMUX_CTRL is
+   port (O : out std_logic; I0 : in std_logic; I1 : in std_logic; S : in std_logic);
+end entity;
+
+architecture sim of BUFGMUX_CTRL is
+begin
+   O <= I1 when S = '1' else I0;
 end architecture;
 
 library ieee;

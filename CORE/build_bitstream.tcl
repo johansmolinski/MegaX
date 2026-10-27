@@ -56,7 +56,7 @@ open_run impl_1
 report_utilization -hierarchical -file CORE-${board}.runs/impl_1/utilization_hierarchical.rpt
 report_timing -max_paths 50 -nworst 1 -sort_by group -file CORE-${board}.runs/impl_1/worst_paths.rpt
 set gate {}
-foreach {clk want} {main_clk 25.000 clk_ram 12.500 clk_scan 14.378} {
+foreach {clk want} {main_clk 25.000 clk_ram 12.500 clk_scan 14.378 clk_scan38 25.731 clk_scan50 19.861 clk_scan75 13.289} {
     set c [get_clocks -quiet $clk]
     if {[llength $c] == 0} {
         lappend gate "generated clock $clk missing"

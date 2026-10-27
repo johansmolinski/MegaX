@@ -19,12 +19,12 @@
 -- sequence starts as soon as `locked` rises and waits only ~15 us; the chip wants 100 us of
 -- stable clock first, so `locked` follows the MMCM lock 8192 clk_sys clocks (205 us) late.
 --
--- Video clock (phase 2): clk_scan is fixed at the X68000's 31 kHz oscillator. The core asks
--- for an oscillator through scan_req (its CRTC mode, x68k_video_clock.sv's request); the
--- handshake below answers like x68k_video_clock: scan_mode = the mode the clock is set up for,
--- scan_ready once it is stable. Only the 31 kHz modes (oscillator family 0) get scan_ready;
--- for the 15 kHz and VGA-dot modes the core's scanout stays in reset (no picture) until the
--- exact oscillators of phase 4.
+-- Video clock (phase 4): the core asks for an oscillator through scan_req (its CRTC mode,
+-- x68k_video_clock.sv's request); the handshake below answers like x68k_video_clock: a request
+-- stable for 64 clocks is applied, scan_sel_o switches clk.vhd's oscillator tree to its family,
+-- scan_mode = the applied mode, scan_ready once the clocks are locked and 4096 clocks have passed
+-- since the switch (the core's scanout stays in reset until then: scan_ready and
+-- scan_mode = its CRTC mode, x68k_native_crtc.sv).
 --
 -- Video into M2M: on clk_scan with the core's pixel enable, RGB 8 bit, syncs active high
 -- (mister_sync.sv), blanks widened to cover the syncs (Megamiga hard rule 6). No scandoubler
@@ -48,7 +48,8 @@ entity main is
       clk_sdram_i             : in    std_logic;
       clk_scan_i              : in    std_logic;
       sys_rst_i               : in    std_logic;     -- clk_sys domain: clocks not locked
-      scan_locked_i           : in    std_logic;     -- the clk_scan MMCM (asynchronous)
+      scan_locked_i           : in    std_logic;     -- the clk_scan MMCMs (asynchronous)
+      scan_sel_o              : out   std_logic_vector(1 downto 0);  -- oscillator family (clk.vhd)
       reset_i                 : in    std_logic;     -- clk_sys domain: the X68000's reset
       turbo_i                 : in    std_logic;     -- 68000 at 20 MHz
       rtc_i                   : in    std_logic_vector(64 downto 0);
@@ -134,6 +135,10 @@ architecture synthesis of main is
    signal scan_quiet    : unsigned(5 downto 0) := (others => '0');
    signal scan_settle   : unsigned(11 downto 0) := (others => '0');
    signal scan_lock_s   : std_logic_vector(1 downto 0) := (others => '0');
+   signal scan_sel      : std_logic_vector(1 downto 0) := "00";
+   -- x68k_video_clock.sv's v60 ("60fps (31k)": the 31 kHz modes on 75.249 MHz); not in the
+   -- menu yet
+   signal scan_v60      : std_logic := '0';
    attribute ASYNC_REG : string;
    attribute ASYNC_REG of scan_lock_s : signal is "TRUE";
 
@@ -166,16 +171,18 @@ architecture synthesis of main is
    signal o_hb          : std_logic := '1';
    signal o_vb          : std_logic := '1';
 
-   -- x68k_video_clock.sv's oscillator family of a mode (v60 = 0): 0 = 69.552 MHz (31 kHz),
-   -- 1 = 38.864 MHz (15 kHz), 2 = 50.35 MHz (HMODE 3)
-   function family(m : std_logic_vector(3 downto 0)) return natural is
+   -- x68k_video_clock.sv's oscillator family of a mode: 0 = 69.552 MHz (31 kHz), 1 = 38.864 MHz
+   -- (15 kHz), 2 = 50.35 MHz (HMODE 3), 3 = 75.249 MHz (31 kHz with v60)
+   function family(m : std_logic_vector(3 downto 0); v60 : std_logic) return std_logic_vector is
    begin
       if m(1 downto 0) = "11" then
-         return 2;
+         return "10";
       elsif m(2) = '0' then
-         return 1;
+         return "01";
+      elsif v60 = '1' then
+         return "11";
       else
-         return 0;
+         return "00";
       end if;
    end function family;
 
@@ -221,6 +228,7 @@ begin
          if scan_quiet = 63 and scan_cand = scan_req and (scan_valid = '0' or scan_req /= scan_applied) then
             scan_applied <= scan_req;
             scan_mode    <= scan_req;
+            scan_sel     <= family(scan_req, scan_v60);
             scan_valid   <= '1';
             scan_settle  <= (others => '0');
          elsif scan_lock_s(1) = '0' then
@@ -230,7 +238,7 @@ begin
          end if;
 
          if scan_valid = '1' and scan_req = scan_applied and scan_lock_s(1) = '1' and
-            scan_settle = 4095 and family(scan_applied) = 0 then
+            scan_settle = 4095 then
             scan_ready <= '1';
          else
             scan_ready <= '0';
@@ -313,6 +321,7 @@ begin
          ps2_kbd_dat_o  => host_dat
       ); -- i_x68_system
 
+   scan_sel_o      <= scan_sel;
    dbg_status_o(5) <= scan_ready;
    dbg_scan_o      <= scan_req & scan_mode;
 

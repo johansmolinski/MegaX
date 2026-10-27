@@ -6,18 +6,26 @@
 
 ## The clocks (CORE/vhdl/clk.vhd). clk_ram 80 MHz and clk_sys 40 MHz come from one MMCM with
 ## aligned edges, as on the MiSTer; clk_sdram is clk_ram at 180 degrees (the SDRAM chip's
-## clock); clk_scan 69.552 MHz (the X68000's 31 kHz oscillator, M2M's video clock) has an MMCM
-## of its own.
+## clock). The video scanout clock (M2M's video clock) is one of the X68000's four oscillators,
+## an MMCM each, chosen by a BUFGMUX_CTRL tree: clk_scan 69.552 MHz (31 kHz modes), clk_scan38
+## 38.864 MHz (15 kHz), clk_scan50 50.35 MHz (VGA 640), clk_scan75 75.249 MHz (31 kHz "60 Hz").
+## All four reach the same scanout registers; only one at a time: logically exclusive.
 create_generated_clock -name clk_ram   [get_pins CORE/clk_gen/i_clk_x68/CLKOUT0]
 create_generated_clock -name main_clk  [get_pins CORE/clk_gen/i_clk_x68/CLKOUT1]
 create_generated_clock -name clk_sdram [get_pins CORE/clk_gen/i_clk_x68/CLKOUT2]
-create_generated_clock -name clk_scan  [get_pins CORE/clk_gen/i_clk_scan/CLKOUT0]
+create_generated_clock -name clk_scan   [get_pins {CORE/clk_gen/g_clk_scan[0].i_clk_scan/CLKOUT0}]
+create_generated_clock -name clk_scan38 [get_pins {CORE/clk_gen/g_clk_scan[1].i_clk_scan/CLKOUT0}]
+create_generated_clock -name clk_scan50 [get_pins {CORE/clk_gen/g_clk_scan[2].i_clk_scan/CLKOUT0}]
+create_generated_clock -name clk_scan75 [get_pins {CORE/clk_gen/g_clk_scan[3].i_clk_scan/CLKOUT0}]
+set SCAN_CLKS [get_clocks {clk_scan clk_scan38 clk_scan50 clk_scan75}]
+set_clock_groups -logically_exclusive -group [get_clocks clk_scan] -group [get_clocks clk_scan38] \
+   -group [get_clocks clk_scan50] -group [get_clocks clk_scan75]
 
 ## The scanout (clk_scan) is asynchronous to the render side and the CPU (X68000.sdc: the
 ## video PLL in a clock group of its own). The core's crossings are #72's handshakes, dual-clock
 ## line RAMs and two-flop synchronizers (x68k_native_crtc.sv, x68k_video_cdc.sv); main.vhd's
 ## scan_locked synchronizer is ASYNC_REG.
-set_clock_groups -asynchronous -group [get_clocks clk_scan] -group [get_clocks {clk_ram main_clk clk_sdram}]
+set_clock_groups -asynchronous -group $SCAN_CLKS -group [get_clocks {clk_ram main_clk clk_sdram}]
 
 ## X68000.sdc: clk_ram -> clk_sys and clk_sys -> clk_ram paths get a whole clk_sys period
 ## (the core hands data between the two on the common edges)
@@ -58,8 +66,8 @@ set_multicycle_path 3 -hold  -end -from [get_clocks main_clk] -to [get_cells -hi
 ## synchronizers, cdc_stable, xpm FIFOs (x68_boot.vhd) or the framework's own CDCs; bound them
 ## to one qnice period (max_delay, not false_path, so the tighter cdc_stable bounds of
 ## common.xdc stay in force).
-set_max_delay -datapath_only 20.000 -from [get_clocks qnice_clk] -to [get_clocks {main_clk clk_scan}]
-set_max_delay -datapath_only 20.000 -from [get_clocks {main_clk clk_scan}] -to [get_clocks qnice_clk]
+set_max_delay -datapath_only 20.000 -from [get_clocks qnice_clk] -to [get_clocks {main_clk clk_scan clk_scan38 clk_scan50 clk_scan75}]
+set_max_delay -datapath_only 20.000 -from [get_clocks {main_clk clk_scan clk_scan38 clk_scan50 clk_scan75}] -to [get_clocks qnice_clk]
 
 ## ascal asynchronous FIFO data crossings (PC10-III/Megamiga CORE.xdc, framework paths): i_dpram
 ## is written on i_clk (= clk_scan) and read on avl_clk (= hr_clk), o_dpram is written on avl_clk

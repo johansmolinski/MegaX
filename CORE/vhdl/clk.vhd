@@ -17,12 +17,16 @@
 --    never got through its IPL). 288 degrees (3.75 ns later) balances read setup/hold and
 --    command setup/hold at about 1 ns each (Vivado checks all four, CORE.xdc).
 --
--- i_clk_scan (VCO 1165 MHz = 100 MHz / 5 x 58.25):
---    clk_scan  = 1165 / 16.75 = 69.552239 MHz (+3.6 ppm)   CLKOUT0
---    The X68000's 31 kHz oscillator (69.552 MHz), the video scanout clock and M2M's video clock.
---    Phase 2: fixed; main.vhd tells the core that only the modes of this oscillator are
---    available (the other three, 38.864 / 50.35 / 75.249 MHz, are phase 4: inventory section 6
---    has MMCM settings for them).
+-- i_clk_scan(0..3): the X68000's video oscillators (x68k_video_clock.sv's families), one MMCM each
+-- (no two of them share a VCO within 60 ppm), internal feedback:
+--    family 0  69.552239 MHz = 100 / 5 x 58.25 / 16.75     (+3.4 ppm)  31 kHz modes
+--    family 1  38.863636 MHz = 100 / 2 x 21.375 / 27.5     (0.0 ppm)   15 kHz modes
+--    family 2  50.349650 MHz = 100 / 1 x 9.0 / 17.875      (-6.9 ppm)  HMODE 3 (VGA 640) modes
+--    family 3  75.249113 MHz = 100 / 7 x 56.625 / 10.75    (+7.6 ppm)  "60 Hz" 31 kHz (boost)
+--    clk_scan = the family scan_sel_i selects, through a tree of three BUFGMUX_CTRL (glitch-free:
+--    all four MMCMs run all the time). It is the video scanout clock and M2M's video clock.
+--    scan_sel_i is asynchronous (main.vhd's handshake holds the X68000's scanout in reset while
+--    it changes, as the MiSTer core does while its PLL relocks).
 --
 -- done by Johan Smolinski in 2026, based on PC10-III's clk.vhd (MiSTer2MEGA65 template, sy2002
 -- and MJoergen)
@@ -50,8 +54,9 @@ entity clk is
       x68_locked_o    : out std_logic;   -- i_clk_x68 locked (asynchronous)
       sys_rst_o       : out std_logic;   -- clk_sys domain: i_clk_x68 not locked
 
-      clk_scan_o      : out std_logic;   -- 69.552 MHz, also M2M's video clock
-      scan_locked_o   : out std_logic;   -- i_clk_scan locked (asynchronous)
+      scan_sel_i      : in  std_logic_vector(1 downto 0);   -- oscillator family (asynchronous)
+      clk_scan_o      : out std_logic;   -- the selected oscillator, also M2M's video clock
+      scan_locked_o   : out std_logic;   -- all four i_clk_scan locked (asynchronous)
       scan_rst_o      : out std_logic    -- clk_scan domain: i_clk_scan not locked
    );
 end entity clk;
@@ -66,9 +71,17 @@ signal clk_sdram_mmcm  : std_logic;
 signal clk_sys         : std_logic;
 signal x68_locked      : std_logic;
 
-signal scan_fb_mmcm    : std_logic;
-signal scan_fb         : std_logic;
-signal clk_scan_mmcm   : std_logic;
+type real_array is array (0 to 3) of real;
+type int_array  is array (0 to 3) of integer;
+constant C_SCAN_D      : int_array  := (5, 2, 1, 7);
+constant C_SCAN_M      : real_array := (58.250, 21.375, 9.000, 56.625);
+constant C_SCAN_O      : real_array := (16.750, 27.500, 17.875, 10.750);
+
+signal scan_fb         : std_logic_vector(0 to 3);
+signal scan_mmcm       : std_logic_vector(0 to 3);
+signal scan_lock       : std_logic_vector(0 to 3);
+signal scan_mux_a      : std_logic;              -- family 0 / 1
+signal scan_mux_b      : std_logic;              -- family 2 / 3
 signal clk_scan        : std_logic;
 signal scan_locked     : std_logic;
 
@@ -126,47 +139,49 @@ begin
          RST                 => '0'
       ); -- i_clk_x68
 
-   i_clk_scan : MMCME2_ADV
-      generic map (
-         BANDWIDTH            => "OPTIMIZED",
-         CLKOUT4_CASCADE      => FALSE,
-         COMPENSATION         => "ZHOLD",
-         STARTUP_WAIT         => FALSE,
-         CLKIN1_PERIOD        => 10.0,       -- INPUT @ 100 MHz
-         REF_JITTER1          => 0.010,
-         DIVCLK_DIVIDE        => 5,          -- PFD 20 MHz
-         CLKFBOUT_MULT_F      => 58.250,     -- VCO 1165 MHz
-         CLKFBOUT_PHASE       => 0.000,
-         CLKFBOUT_USE_FINE_PS => FALSE,
-         CLKOUT0_DIVIDE_F     => 16.750,     -- clk_scan 69.552239 MHz
-         CLKOUT0_PHASE        => 0.000,
-         CLKOUT0_DUTY_CYCLE   => 0.500,
-         CLKOUT0_USE_FINE_PS  => FALSE
-      )
-      port map (
-         CLKFBOUT            => scan_fb_mmcm,
-         CLKOUT0             => clk_scan_mmcm,
-         CLKFBIN             => scan_fb,
-         CLKIN1              => sys_clk_i,
-         CLKIN2              => '0',
-         CLKINSEL            => '1',
-         DADDR               => (others => '0'),
-         DCLK                => '0',
-         DEN                 => '0',
-         DI                  => (others => '0'),
-         DO                  => open,
-         DRDY                => open,
-         DWE                 => '0',
-         PSCLK               => '0',
-         PSEN                => '0',
-         PSINCDEC            => '0',
-         PSDONE              => open,
-         LOCKED              => scan_locked,
-         CLKINSTOPPED        => open,
-         CLKFBSTOPPED        => open,
-         PWRDWN              => '0',
-         RST                 => '0'
-      ); -- i_clk_scan
+   g_clk_scan : for i in 0 to 3 generate
+      i_clk_scan : MMCME2_ADV
+         generic map (
+            BANDWIDTH            => "OPTIMIZED",
+            CLKOUT4_CASCADE      => FALSE,
+            COMPENSATION         => "INTERNAL",  -- feedback CLKFBOUT -> CLKFBIN, no BUFG
+            STARTUP_WAIT         => FALSE,
+            CLKIN1_PERIOD        => 10.0,        -- INPUT @ 100 MHz
+            REF_JITTER1          => 0.010,
+            DIVCLK_DIVIDE        => C_SCAN_D(i),
+            CLKFBOUT_MULT_F      => C_SCAN_M(i),
+            CLKFBOUT_PHASE       => 0.000,
+            CLKFBOUT_USE_FINE_PS => FALSE,
+            CLKOUT0_DIVIDE_F     => C_SCAN_O(i),
+            CLKOUT0_PHASE        => 0.000,
+            CLKOUT0_DUTY_CYCLE   => 0.500,
+            CLKOUT0_USE_FINE_PS  => FALSE
+         )
+         port map (
+            CLKFBOUT            => scan_fb(i),
+            CLKOUT0             => scan_mmcm(i),
+            CLKFBIN             => scan_fb(i),
+            CLKIN1              => sys_clk_i,
+            CLKIN2              => '0',
+            CLKINSEL            => '1',
+            DADDR               => (others => '0'),
+            DCLK                => '0',
+            DEN                 => '0',
+            DI                  => (others => '0'),
+            DO                  => open,
+            DRDY                => open,
+            DWE                 => '0',
+            PSCLK               => '0',
+            PSEN                => '0',
+            PSINCDEC            => '0',
+            PSDONE              => open,
+            LOCKED              => scan_lock(i),
+            CLKINSTOPPED        => open,
+            CLKFBSTOPPED        => open,
+            PWRDWN              => '0',
+            RST                 => '0'
+         ); -- i_clk_scan
+   end generate g_clk_scan;
 
    x68_fb_bufg : BUFG
       port map (
@@ -192,17 +207,32 @@ begin
          O => clk_sdram_o
       );
 
-   scan_fb_bufg : BUFG
+   -- the oscillator tree: S selects I1
+   i_scan_mux_a : BUFGMUX_CTRL
       port map (
-         I => scan_fb_mmcm,
-         O => scan_fb
+         I0 => scan_mmcm(0),
+         I1 => scan_mmcm(1),
+         S  => scan_sel_i(0),
+         O  => scan_mux_a
       );
 
-   clk_scan_bufg : BUFG
+   i_scan_mux_b : BUFGMUX_CTRL
       port map (
-         I => clk_scan_mmcm,
-         O => clk_scan
+         I0 => scan_mmcm(2),
+         I1 => scan_mmcm(3),
+         S  => scan_sel_i(0),
+         O  => scan_mux_b
       );
+
+   i_scan_mux : BUFGMUX_CTRL
+      port map (
+         I0 => scan_mux_a,
+         I1 => scan_mux_b,
+         S  => scan_sel_i(1),
+         O  => clk_scan
+      );
+
+   scan_locked <= scan_lock(0) and scan_lock(1) and scan_lock(2) and scan_lock(3);
 
    clk_sys_o     <= clk_sys;
    clk_scan_o    <= clk_scan;
