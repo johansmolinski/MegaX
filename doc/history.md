@@ -211,3 +211,19 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   type. Menu signature 2 (18 lines).
 - The drive LED is the X68000's floppy motor (MiSTer's user LED).
 - `tb/shell/tb_sd`: PASS.
+
+## 2026-10-27 - First bitstream that meets timing: megax-f
+
+- `megax-c`/`-d`: hold -11.2 ns on clk_ram -> fx68k: my translation of X68000.sdc mixed a
+  `-end` setup multicycle (the "to the 68000" rule) with a `-start` hold one on an 80 -> 40 MHz
+  path. Now every cell-based multicycle counts in destination clocks for setup and hold, and
+  "into the 68000" applies only from main_clk (`b928263`).
+- `megax-e`: setup met (WNS +0.004 ns, the SDRAM address pins, 3 ns of routing between
+  register and pad), hold -0.556 ns on cacheext's `srclk` (it samples clk_sys as data):
+  X68000.sdc's false path was missing (`3675ddf`, with IOB TRUE on the SDRAM pins).
+- **`megax-f`: RESULT OK, WNS +0.157 ns, WHS +0.036 ns.** SDRAM: read capture setup +6.66 /
+  hold +9.93 ns, command/address/data out setup +0.29 / hold +4.78 ns against the
+  datasheet (tAC 6.0, tOH 2.5, tIS 1.5, tIH 0.8 ns) and 0.1-0.5 ns traces. The DQ pins stay
+  out of the IOBs (SDRAMC drives all 16 output enables from one register). 54.1k LUTs
+  (40 %), 313 / 365 block RAM tiles. `tools/make_cor.sh` -> `MegaX-0.1-f-R6.cor`. Not yet
+  tried on the hardware.
