@@ -77,7 +77,8 @@ constant SCR_WELCOME : string :=
 constant HELP_1 : string :=
    " MegaX " & CORE_VERSION & " - Sharp X68000 for MEGA65\n\n" &
    " The MiSTer X68000 core (Puu-san) on the MEGA65.\n" &
-   " /megax/boot.rom   MiSTer's boot.rom (1 MB)\n\n" &
+   " /megax/boot.rom   MiSTer's boot.rom (1 MB)\n" &
+   " FDD0, FDD1        XDF/DIM/HDM or D88 images\n\n" &
    " Keys (MiSTer layout):\n" &
    " " & CHR_LINE_10 & CHR_LINE_10 & CHR_LINE_10 & CHR_LINE_10 & "\n" &
    " F1 F3 .. F13      F1 .. F7\n" &
@@ -195,30 +196,36 @@ constant OPTM_S_SAVING     : string := "<Saving>";
 -- (mega65.vhd C_MENU_*):
 --     0  MegaX                   headline
 --     1  ----
---     2  HDMI: %s                submenu
---     3    HDMI mode             headline
---     4    ----
---     5    720p 60 Hz 16:9       C_MENU_HDMI_720P (default)
---     6    720p 50 Hz 16:9       C_MENU_HDMI_720P50
+--     2  FDD0:%s                 floppy image of drive 0 (manual ROM load 0, x68_sd.vhd slot 0)
+--     3  FDD1:%s                 floppy image of drive 1 (manual ROM load 1, slot 1)
+--     4  ----
+--     5  HDMI: %s                submenu
+--     6    HDMI mode             headline
 --     7    ----
---     8    Back to main menu
---     9  68000 at 20 MHz         C_MENU_TURBO (MiSTer's "Turbo"; default off: 10 MHz)
---    10  ----
---    11  Help
---    12  Reset the X68000        C_MENU_RESET (momentary: the firmware resets and clears it)
+--     8    720p 60 Hz 16:9       C_MENU_HDMI_720P (default)
+--     9    720p 50 Hz 16:9       C_MENU_HDMI_720P50
+--    10    ----
+--    11    Back to main menu
+--    12  68000 at 20 MHz         C_MENU_TURBO (MiSTer's "Turbo"; default off: 10 MHz)
 --    13  ----
---    14  Close Menu
+--    14  Help
+--    15  Reset the X68000        C_MENU_RESET (momentary: the firmware resets and clears it)
+--    16  ----
+--    17  Close Menu
 --
 -- The settings file keeps one byte per line, so the layout is part of its format: the
 -- firmware's CFG_SIGCHECK accepts only a file whose text carries this menu's signature
 -- (m2m-rom.asm, CFG_SIG_VAL; change it with every layout change), any other file is reset to
 -- the defaults.
-constant OPTM_SIZE         : natural := 15;
-constant OPTM_DX           : natural := 24;
-constant OPTM_DY           : natural := 9;    -- the visible main menu (lines 0-2, 9-14)
+constant OPTM_SIZE         : natural := 18;
+constant OPTM_DX           : natural := 30;
+constant OPTM_DY           : natural := 12;   -- the visible main menu (lines 0-5, 12-17)
 
 constant OPTM_ITEMS        : string :=
    " MegaX\n"                 &
+   "\n"                       &
+   " FDD0:%s\n"               &
+   " FDD1:%s\n"               &
    "\n"                       &
    " HDMI: %s\n"              &
    " HDMI mode\n"             &
@@ -238,24 +245,29 @@ constant OPTM_ITEMS        : string :=
 constant OPTM_G_HDMI       : integer := 1;
 constant OPTM_G_TURBO      : integer := 2;
 constant OPTM_G_RESET      : integer := 3;
+constant OPTM_G_FDD0       : integer := 4;
+constant OPTM_G_FDD1       : integer := 5;
 
 type OPTM_GTYPE is array (0 to OPTM_SIZE - 1) of integer range 0 to 2**OPTM_GTC- 1;
 
 constant OPTM_GROUPS       : OPTM_GTYPE := ( OPTM_G_TEXT + OPTM_G_HEADLINE,            --  0 MegaX
                                              OPTM_G_LINE,                              --  1
-                                             OPTM_G_SUBMENU + OPTM_G_START,            --  2 HDMI: %s
-                                             OPTM_G_TEXT + OPTM_G_HEADLINE,            --  3 HDMI mode
+                                             OPTM_G_FDD0 + OPTM_G_LOAD_ROM + OPTM_G_START, --  2 FDD0:%s
+                                             OPTM_G_FDD1 + OPTM_G_LOAD_ROM,            --  3 FDD1:%s
                                              OPTM_G_LINE,                              --  4
-                                             OPTM_G_HDMI + OPTM_G_STDSEL,              --  5 720p 60 Hz
-                                             OPTM_G_HDMI,                              --  6 720p 50 Hz
+                                             OPTM_G_SUBMENU,                           --  5 HDMI: %s
+                                             OPTM_G_TEXT + OPTM_G_HEADLINE,            --  6 HDMI mode
                                              OPTM_G_LINE,                              --  7
-                                             OPTM_G_CLOSE + OPTM_G_SUBMENU,            --  8 Back
-                                             OPTM_G_TURBO + OPTM_G_SINGLESEL,          --  9 68000 at 20 MHz
+                                             OPTM_G_HDMI + OPTM_G_STDSEL,              --  8 720p 60 Hz
+                                             OPTM_G_HDMI,                              --  9 720p 50 Hz
                                              OPTM_G_LINE,                              -- 10
-                                             OPTM_G_HELP,                              -- 11 Help
-                                             OPTM_G_RESET + OPTM_G_SINGLESEL,          -- 12 Reset the X68000
+                                             OPTM_G_CLOSE + OPTM_G_SUBMENU,            -- 11 Back
+                                             OPTM_G_TURBO + OPTM_G_SINGLESEL,          -- 12 68000 at 20 MHz
                                              OPTM_G_LINE,                              -- 13
-                                             OPTM_G_CLOSE                              -- 14 Close Menu
+                                             OPTM_G_HELP,                              -- 14 Help
+                                             OPTM_G_RESET + OPTM_G_SINGLESEL,          -- 15 Reset the X68000
+                                             OPTM_G_LINE,                              -- 16
+                                             OPTM_G_CLOSE                              -- 17 Close Menu
                                            );
 
 -- M2M-UPSTREAM menu-rows (Megamiga, M2M/rom/menu_rows.asm): radio groups drawn as a row. None

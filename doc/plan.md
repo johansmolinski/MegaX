@@ -1,7 +1,9 @@
 # MegaX - the plan
 
-Status: 2026-10-26, bootstrap. The facts behind this plan, with file:line
-references into the MiSTer core, are in `doc/inventory.md`.
+Status: 2026-10-27, phase 1 done (the IPL boots a disk in simulation and
+draws), phase 2 (the MEGA65 shell) built, waiting for the first hardware test.
+The facts behind this plan, with file:line references into the MiSTer core, are
+in `doc/inventory.md`; what happened, in `doc/history.md`.
 
 ## 1. Starting point
 
@@ -26,10 +28,13 @@ render) and 40 MHz (`clk_sys`: 68000 via clock enables at 10/20 MHz, all
 peripherals), plus a run-time retuned video PLL for the X68000's four
 oscillators (69.552, 38.864, 50.35 MHz and 75.249 MHz for "60 fps").
 
-- Phase 2: one MMCM for 80/40 MHz (CL2 SDRAM with an ODDR-forwarded,
-  inverted clock as on MiSTer) and **one fixed video clock**, using the
-  pre-#72 fractional pixel-enable path still in `mister_sync.sv` (works,
-  shimmers on some modes).
+- Phase 2 (done that way, `CORE/vhdl/clk.vhd`): one MMCM for 80/40 MHz (CL2
+  SDRAM with an ODDR-forwarded clock at 180 degrees, as on MiSTer) and **one
+  fixed video clock at the 31 kHz oscillator, 69.552 MHz**. The core asks for
+  its oscillator (`scan_req`); `main.vhd` grants it only for the 31 kHz modes
+  (IPL, Human68k's 768x512), the others stay dark until phase 4. (The first
+  idea, the pre-#72 fractional pixel enable in `mister_sync.sv`, would have
+  needed a change to #72's CRTC.)
 - Phase 4: exact oscillators: a second MMCM reprogrammed through its DRP
   (all four have fits within 7 ppm from a 100 MHz reference, inventory 6),
   or four outputs and a glitch-free BUFGMUX. M2M's video pipeline then sees a
@@ -75,7 +80,7 @@ with a timing-checking SDRAM model).
 | SASI HDF, SxSI HDS x4 (GB images) | the same sector service (Megamiga's `ide_engine` / PC10-III's hard disk C:) |
 | SRAM image (16 KB, default `boot3.vhd`) | load at start, write back on change (settings-file path, Megamiga's cfg strings) |
 | RTC (`sysrtc`, 65 bits) | M2M's `main_rtc_i` (same format) |
-| PS/2 keyboard -> `KBCONV` (tables `ktbln_m`/`ktble0_m`) | MEGA65 matrix -> X68000 key codes directly into `KBCONV`'s output side (no PS/2 round trip), a new table |
+| PS/2 keyboard -> `KBCONV` (tables `ktbln_m`/`ktble0_m`) | phase 2: MEGA65 matrix -> PS/2 set 2 -> a PS/2 keyboard device in the shell (`keyboard.vhd`) -> `KBCONV` with the MiSTer layout, unchanged (the MEGA key is the Windows key of KBCONV's combos) |
 | PS/2 mouse -> `MOUSECONV` | DB9 Amiga/1351 mouse -> X68000 mouse packets (later) |
 | joysticks (USB, 7 pad types) | two DB9 ports: 2-button first; MD/6-button/CyberStick need real pads on the strobe line (later) |
 | MIDI on UART, MT32-pi on USER_IO | PMOD (later, optional) |
@@ -110,10 +115,10 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
    Goal: the IPL runs and draws its first screen (frame dump to PNG). This is
    the reference for every later step and catches the Altera-to-Xilinx RAM
    semantics (read-during-write, unregistered outputs) early.
-2. **MEGA65 shell, first light.** `CORE/vhdl` (clk, mega65, main, config,
-   globals, keyboard), firmware, `CORE-R6.xpr`, build scripts (from
-   PC10-III). Fixed video clock. Goal: the IPL's "insert a disk" screen on
-   HDMI, keyboard working.
+2. **MEGA65 shell, first light** (built 2026-10-27, hardware test next).
+   `CORE/vhdl` (clk, mega65, main, config, globals, keyboard, x68_boot),
+   firmware, `CORE-R6.xpr`, build scripts (from PC10-III). Fixed video clock.
+   Goal: the IPL's "insert a disk" screen on HDMI, keyboard working.
 3. **Disks.** XDF/DIM/HDM floppies through the SD sector service, then D88,
    SRAM persistence, SASI/SxSI hard disks. Goal: Human68k boots from floppy
    and from a hard disk image.

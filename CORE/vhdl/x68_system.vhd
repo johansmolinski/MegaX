@@ -105,6 +105,7 @@ port (
    sd_buff_wr     : in    std_logic;
    fd_eject       : in    std_logic_vector(1 downto 0);    -- one clock: eject FDD0/FDD1
    fd_sync        : in    std_logic_vector(1 downto 0);    -- write FDD0/FDD1 (D88) changes back
+   fd_motor       : out   std_logic;                       -- a floppy motor runs (MiSTer's user LED)
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -380,7 +381,7 @@ begin
       pJoySelB         => open,
       pFDSYNC          => fd_sync,
       pFDEJECT         => fd_eject_d,
-      pFDMOTOR         => open,
+      pFDMOTOR         => fd_motor,
       pFDACTIVE        => open,
       pFDEJECTED       => open,
       pfdwait          => "00",

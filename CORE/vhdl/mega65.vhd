@@ -9,7 +9,10 @@
 -- * x68_boot.vhd: /megax/boot.rom from the Shell's ROM auto-loader to the core's loader port
 --   (QNICE device C_DEV_X68_BOOT); the X68000 starts with the first byte and runs once the
 --   firmware has checked the size and ended the load (PREP_START)
--- * the OSM settings (config.vhd): HDMI mode, 68000 at 20 MHz, reset
+-- * x68_sd.vhd: the floppy images of FDD0 and FDD1 straight from the SD card (QNICE devices
+--   C_DEV_X68_FDD0/1, the SD host's engine port), served to the core through MiSTer's hps_io
+--   sector interface
+-- * the OSM settings (config.vhd): FDD0, FDD1, HDMI mode, 68000 at 20 MHz, reset
 --
 -- Resets: the Shell holds the core in reset (main_reset_core_i) while it loads the boot ROM,
 -- but the X68000 must run then: its memory controller writes the ROM into the SDRAM. So the
@@ -328,10 +331,12 @@ architecture synthesis of MEGA65_Core is
 -- scrapes them into osm_const.asm as X68_OSM_*)
 ---------------------------------------------------------------------------------------------
 
-constant C_MENU_HDMI_720P     : natural := 5;
-constant C_MENU_HDMI_720P50   : natural := 6;
-constant C_MENU_TURBO         : natural := 9;
-constant C_MENU_RESET         : natural := 12;
+constant C_MENU_FDD0_LN       : natural := 2;   -- " FDD0:%s"
+constant C_MENU_FDD1_LN       : natural := 3;   -- " FDD1:%s"
+constant C_MENU_HDMI_720P     : natural := 8;
+constant C_MENU_HDMI_720P50   : natural := 9;
+constant C_MENU_TURBO         : natural := 12;
+constant C_MENU_RESET         : natural := 15;
 
 ---------------------------------------------------------------------------------------------
 -- Clocks and resets
@@ -345,6 +350,7 @@ signal main_rst               : std_logic;
 signal video_rst              : std_logic;
 signal scan_locked            : std_logic;
 signal main_x68_reset         : std_logic := '1';
+signal main_fd_motor          : std_logic;
 
 ---------------------------------------------------------------------------------------------
 -- boot ROM loader
@@ -361,6 +367,28 @@ signal qnice_boot_data        : std_logic_vector(15 downto 0);
 signal qnice_boot_ce          : std_logic;
 signal qnice_boot_we          : std_logic;
 signal qnice_boot_wait        : std_logic;
+
+---------------------------------------------------------------------------------------------
+-- disk images (x68_sd.vhd): QNICE side and the core's hps_io sector interface (main clock)
+---------------------------------------------------------------------------------------------
+
+signal qnice_sd_data          : std_logic_vector(15 downto 0);
+signal qnice_sd_ce            : std_logic;
+signal qnice_sd_we            : std_logic;
+signal qnice_sd_slot          : std_logic_vector(2 downto 0);
+
+signal main_img_mounted       : std_logic_vector(7 downto 0);
+signal main_img_readonly      : std_logic;
+signal main_img_size          : std_logic_vector(63 downto 0);
+signal main_img_xdf           : std_logic;
+signal main_sd_lba            : std_logic_vector(31 downto 0);
+signal main_sd_rd             : std_logic_vector(7 downto 0);
+signal main_sd_wr             : std_logic_vector(7 downto 0);
+signal main_sd_ack            : std_logic_vector(7 downto 0);
+signal main_sd_buff_addr      : std_logic_vector(8 downto 0);
+signal main_sd_buff_dout      : std_logic_vector(7 downto 0);
+signal main_sd_buff_din       : std_logic_vector(7 downto 0);
+signal main_sd_buff_wr        : std_logic;
 
 begin
 
@@ -433,8 +461,7 @@ begin
    eth_txd_o            <= (others => '0');
    eth_txen_o           <= '0';
 
-   -- M2M-UPSTREAM sd-host: the engine port idle (the disks are phase 3)
-   sd_eng_o             <= (others => '0');
+   -- M2M-UPSTREAM sd-host: the engine port is x68_sd's (below)
 
    -- Expansion port: tristate everything; enabled because of the R5/R6 joystick port 2 bug
    cart_ctrl_oe_o       <= '0';
@@ -501,11 +528,12 @@ begin
    -- main_clk
    ---------------------------------------------------------------------------------------------
 
-   -- Power LED: green; blue while the reset button is held long. Drive LED: off (phase 3).
+   -- Power LED: green; blue while the reset button is held long. Drive LED: yellow while a
+   -- floppy motor runs (MiSTer's user LED, X68000.sv's fdd_active).
    main_power_led_o     <= '1';
    main_power_led_col_o <= x"0000FF" when main_reset_m2m_i else x"00FF00";
-   main_drive_led_o     <= '0';
-   main_drive_led_col_o <= x"00FF00";
+   main_drive_led_o     <= main_fd_motor;
+   main_drive_led_col_o <= x"FFFF00";
 
    -- The X68000's reset: the M2M resets (reset button, the Shell's CSR reset, i.e. the OSM's
    -- "Reset the X68000"), only once the boot ROM is in (see the header)
@@ -543,6 +571,21 @@ begin
          video_hs_o           => video_hs_o,
          video_hblank_o       => video_hblank_o,
          video_vblank_o       => video_vblank_o,
+
+         fd_motor_o           => main_fd_motor,
+
+         img_mounted_i        => main_img_mounted,
+         img_readonly_i       => main_img_readonly,
+         img_size_i           => main_img_size,
+         img_xdf_i            => main_img_xdf,
+         sd_lba_o             => main_sd_lba,
+         sd_rd_o              => main_sd_rd,
+         sd_wr_o              => main_sd_wr,
+         sd_ack_i             => main_sd_ack,
+         sd_buff_addr_i       => main_sd_buff_addr,
+         sd_buff_dout_i       => main_sd_buff_dout,
+         sd_buff_din_o        => main_sd_buff_din,
+         sd_buff_wr_i         => main_sd_buff_wr,
 
          audio_left_o         => main_audio_left_o,
          audio_right_o        => main_audio_right_o,
@@ -595,6 +638,9 @@ begin
       qnice_dev_wait_o <= '0';
       qnice_boot_ce    <= '0';
       qnice_boot_we    <= '0';
+      qnice_sd_ce      <= '0';
+      qnice_sd_we      <= '0';
+      qnice_sd_slot    <= "000";
 
       case qnice_dev_id_i is
          when C_DEV_X68_BOOT =>
@@ -602,6 +648,14 @@ begin
             qnice_boot_we    <= qnice_dev_we_i;
             qnice_dev_data_o <= qnice_boot_data;
             qnice_dev_wait_o <= qnice_boot_wait;
+
+         when C_DEV_X68_FDD0 | C_DEV_X68_FDD1 =>
+            qnice_sd_ce      <= qnice_dev_ce_i;
+            qnice_sd_we      <= qnice_dev_we_i;
+            if qnice_dev_id_i = C_DEV_X68_FDD1 then
+               qnice_sd_slot <= "001";
+            end if;
+            qnice_dev_data_o <= qnice_sd_data;
 
          when others => null;
       end case;
@@ -627,5 +681,35 @@ begin
          boot_wait_i          => main_boot_wait,
          boot_ended_o         => main_boot_ended
       ); -- i_x68_boot
+
+   i_x68_sd : entity work.x68_sd
+      port map (
+         qnice_clk_i          => qnice_clk_i,
+         qnice_rst_i          => qnice_rst_i,
+         qnice_slot_i         => qnice_sd_slot,
+         qnice_addr_i         => qnice_dev_addr_i,
+         qnice_data_i         => qnice_dev_data_i,
+         qnice_data_o         => qnice_sd_data,
+         qnice_ce_i           => qnice_sd_ce,
+         qnice_we_i           => qnice_sd_we,
+         sd_c2q_o             => sd_eng_o,
+         sd_q2c_i             => sd_eng_i,
+         main_clk_i           => main_clk,
+         main_rst_i           => main_rst,
+         img_mounted_o        => main_img_mounted,
+         img_readonly_o       => main_img_readonly,
+         img_size_o           => main_img_size,
+         img_xdf_o            => main_img_xdf,
+         sd_lba_i             => main_sd_lba,
+         sd_rd_i              => main_sd_rd,
+         sd_wr_i              => main_sd_wr,
+         sd_ack_o             => main_sd_ack,
+         sd_buff_addr_o       => main_sd_buff_addr,
+         sd_buff_dout_o       => main_sd_buff_dout,
+         sd_buff_din_i        => main_sd_buff_din,
+         sd_buff_wr_o         => main_sd_buff_wr,
+         main_busy_o          => open,
+         main_present_o       => open
+      ); -- i_x68_sd
 
 end architecture synthesis;

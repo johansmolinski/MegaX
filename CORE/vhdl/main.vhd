@@ -3,8 +3,8 @@
 --
 -- Wrapper for the machine: x68_system (the MiSTer core and its MiSTer-top glue) plus what it
 -- needs from the MEGA65: the PS/2 keyboard (keyboard.vhd), the SDRAM pins, the video clock
--- handshake, video into M2M, audio. The boot ROM loader (x68_boot.vhd) and the menu live in
--- mega65.vhd.
+-- handshake, video into M2M, audio. The boot ROM loader (x68_boot.vhd), the disk images
+-- (x68_sd.vhd, through the hps_io ports here) and the menu live in mega65.vhd.
 --
 -- Clocks (clk.vhd): clk_ram 80 MHz, clk_sys 40 MHz (= M2M's main clock: the keyboard, the
 -- menu bits, the audio), clk_scan 69.552 MHz (= M2M's video clock), clk_sdram 80 MHz (the
@@ -70,6 +70,23 @@ entity main is
       video_hs_o              : out   std_logic;
       video_hblank_o          : out   std_logic;
       video_vblank_o          : out   std_logic;
+
+      -- a floppy motor runs (clk_sys; the drive LED, as MiSTer's user LED)
+      fd_motor_o              : out   std_logic;
+
+      -- disk images: MiSTer's hps_io sector interface (clk_sys; x68_sd.vhd)
+      img_mounted_i           : in    std_logic_vector(7 downto 0);
+      img_readonly_i          : in    std_logic;
+      img_size_i              : in    std_logic_vector(63 downto 0);
+      img_xdf_i               : in    std_logic;
+      sd_lba_o                : out   std_logic_vector(31 downto 0);
+      sd_rd_o                 : out   std_logic_vector(7 downto 0);
+      sd_wr_o                 : out   std_logic_vector(7 downto 0);
+      sd_ack_i                : in    std_logic_vector(7 downto 0);
+      sd_buff_addr_i          : in    std_logic_vector(8 downto 0);
+      sd_buff_dout_i          : in    std_logic_vector(7 downto 0);
+      sd_buff_din_o           : out   std_logic_vector(7 downto 0);
+      sd_buff_wr_i            : in    std_logic;
 
       -- Audio output (clk_sys, signed PCM)
       audio_left_o            : out   signed(15 downto 0);
@@ -263,21 +280,21 @@ begin
          video_31k      => open,
          audio_l        => snd_l,
          audio_r        => snd_r,
-         -- disks: phase 3 (no image mounted)
-         img_mounted    => (others => '0'),
-         img_readonly   => '0',
-         img_size       => (others => '0'),
-         img_xdf        => '0',
-         sd_lba         => open,
-         sd_rd          => open,
-         sd_wr          => open,
-         sd_ack         => (others => '0'),
-         sd_buff_addr   => (others => '0'),
-         sd_buff_dout   => (others => '0'),
-         sd_buff_din    => open,
-         sd_buff_wr     => '0',
+         img_mounted    => img_mounted_i,
+         img_readonly   => img_readonly_i,
+         img_size       => img_size_i,
+         img_xdf        => img_xdf_i,
+         sd_lba         => sd_lba_o,
+         sd_rd          => sd_rd_o,
+         sd_wr          => sd_wr_o,
+         sd_ack         => sd_ack_i,
+         sd_buff_addr   => sd_buff_addr_i,
+         sd_buff_dout   => sd_buff_dout_i,
+         sd_buff_din    => sd_buff_din_o,
+         sd_buff_wr     => sd_buff_wr_i,
          fd_eject       => "00",
          fd_sync        => "00",
+         fd_motor       => fd_motor_o,
          ps2_kbd_clk_i  => kbd_clk,
          ps2_kbd_dat_i  => kbd_dat,
          ps2_kbd_clk_o  => host_clk,

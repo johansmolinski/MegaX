@@ -89,6 +89,11 @@ constant C_HMAP_M2M           : std_logic_vector(15 downto 0) := x"0000";     --
 -- offset 0); every byte goes straight on to the X68000's loader port (the core writes it into the
 -- SDRAM). Window 0x0100 = its control registers (see x68_boot.vhd).
 constant C_DEV_X68_BOOT       : std_logic_vector(15 downto 0) := x"0100";
+-- The disk images (x68_sd.vhd): MiSTer's slots 0 and 1, the floppy drives FDD0 and FDD1. Window 0
+-- registers, window 1 the extent map, window 0xFFFF the CRT/ROM load CSR. Manual "ROM" loads in
+-- the menu (nothing is streamed: the firmware hands the file's extent map over).
+constant C_DEV_X68_FDD0       : std_logic_vector(15 downto 0) := x"0101";
+constant C_DEV_X68_FDD1       : std_logic_vector(15 downto 0) := x"0102";
 
 ----------------------------------------------------------------------------------------------------------
 -- Virtual Drive Management System: not used (yet)
@@ -116,9 +121,12 @@ constant C_CRTROMTYPE_SDRAM      : std_logic_vector(15 downto 0) := x"0002";
 constant C_CRTROMTYPE_MANDATORY  : std_logic_vector(15 downto 0) := x"0003";
 constant C_CRTROMTYPE_OPTIONAL   : std_logic_vector(15 downto 0) := x"0004";
 
--- Manually loadable ROMs: none yet (the floppy and hard disk images come in phase 3)
-constant C_CRTROMS_MAN_NUM       : natural := 0;
-constant C_CRTROMS_MAN           : crtrom_buf_array := ( x"EEEE", x"EEEE",
+-- Manually loadable ROMs: the floppy images of FDD0 and FDD1 (menu lines " FDD0:%s", " FDD1:%s").
+-- The firmware's PREP_LOAD_IMAGE hands the file to x68_sd.vhd (extent map) and leaves the file
+-- pointer at the end, so the Shell streams nothing and only does the CSR handshake.
+constant C_CRTROMS_MAN_NUM       : natural := 2;
+constant C_CRTROMS_MAN           : crtrom_buf_array := ( C_CRTROMTYPE_DEVICE, C_DEV_X68_FDD0,
+                                                         C_CRTROMTYPE_DEVICE, C_DEV_X68_FDD1,
                                                          x"EEEE");
 
 -- Automatically loaded ROMs: MiSTer's boot.rom (the X68000's CGROM and IPL, Sharp's: never in the
