@@ -117,3 +117,5 @@ One entry per increment: what, why, test numbers, build names.
   serialise fx68k's unpacked structs): `ckpt-1770.bin` (68 MB, just before the
   boot sector read); `rsim.sh from <run> <name>` reuses a run's build and
   checkpoints, so a boot sector change is tested in minutes, not 35.
+  Frame 45 of run `disk-g` (2.59 s, contrast still rising):
+  `doc/img/sim-first-picture.png`.
