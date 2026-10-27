@@ -191,6 +191,8 @@ int main(int argc, char** argv) {
    top->fd_eject = 0;
    top->fd_sync = 0;
    top->scan_mode = 0;
+   top->ps2_kbd_clk_i = 1;                               // no keyboard: the lines released
+   top->ps2_kbd_dat_i = 1;
    top->clk_ram = top->clk_sys = top->clk_scan = 0;
    top->eval();
 

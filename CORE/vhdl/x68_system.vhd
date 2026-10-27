@@ -22,9 +22,12 @@
 -- sd_*), served by the platform: the testbench in simulation, the SD card
 -- sector service on the MEGA65. The mount glue of X68000.sv is here.
 --
--- Status 2026-10-27 (phase 1): no keyboard, mouse or joysticks yet (tied to
--- their idle levels, as on a MiSTer with nothing pressed); SRAM image
--- load/save not wired.
+-- The keyboard is MiSTer's PS/2 path (KBCONV with the "MiSTer" layout); the
+-- platform plays the PS/2 keyboard (keyboard.vhd on the MEGA65).
+--
+-- Status 2026-10-27 (phase 2): no mouse or joysticks yet (tied to their idle
+-- levels, as on a MiSTer with nothing plugged in); SRAM image load/save not
+-- wired.
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -101,7 +104,15 @@ port (
    sd_buff_din    : out   std_logic_vector(7 downto 0);
    sd_buff_wr     : in    std_logic;
    fd_eject       : in    std_logic_vector(1 downto 0);    -- one clock: eject FDD0/FDD1
-   fd_sync        : in    std_logic_vector(1 downto 0)     -- write FDD0/FDD1 (D88) changes back
+   fd_sync        : in    std_logic_vector(1 downto 0);    -- write FDD0/FDD1 (D88) changes back
+
+   -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
+   -- device's clock and data into the core, the core's (host) clock and data out to the device
+   -- (keyboard.vhd on the MEGA65; '1' = released)
+   ps2_kbd_clk_i  : in    std_logic;
+   ps2_kbd_dat_i  : in    std_logic;
+   ps2_kbd_clk_o  : out   std_logic;
+   ps2_kbd_dat_o  : out   std_logic
 );
 end entity x68_system;
 
@@ -353,10 +364,10 @@ begin
       ldr_wr           => ldr_wr,
       ldr_ack          => ldr_ack,
       ldr_done         => ldr_done,
-      pPs2Clkin        => '1',
-      pPs2Clkout       => open,
-      pPs2Datin        => '1',
-      pPs2Datout       => open,
+      pPs2Clkin        => ps2_kbd_clk_i,
+      pPs2Clkout       => ps2_kbd_clk_o,
+      pPs2Datin        => ps2_kbd_dat_i,
+      pPs2Datout       => ps2_kbd_dat_o,
       pPmsClkin        => '1',
       pPmsClkout       => open,
       pPmsDatin        => '1',
