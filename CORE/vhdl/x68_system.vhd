@@ -25,9 +25,8 @@
 -- The keyboard is MiSTer's PS/2 path (KBCONV with the "MiSTer" layout); the
 -- platform plays the PS/2 keyboard (keyboard.vhd on the MEGA65).
 --
--- Status 2026-10-27 (phase 2): no mouse or joysticks yet (tied to their idle
--- levels, as on a MiSTer with nothing plugged in); SRAM image load/save not
--- wired.
+-- Status 2026-10-27 (phase 3): no mouse or joysticks yet (tied to their idle
+-- levels, as on a MiSTer with nothing plugged in).
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -106,6 +105,9 @@ port (
    fd_eject       : in    std_logic_vector(1 downto 0);    -- one clock: eject FDD0/FDD1
    fd_sync        : in    std_logic_vector(1 downto 0);    -- write FDD0/FDD1 (D88) changes back
    fd_motor       : out   std_logic;                       -- a floppy motor runs (MiSTer's user LED)
+   sram_ld        : in    std_logic;                       -- MiSTer's "Load SRAM from SD Card" (level)
+   sram_st        : in    std_logic;                       -- "Save SRAM to SD Card" (level)
+   sxsi_inject    : in    std_logic;                       -- "Inject SXSI driver" (the core takes the edge)
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -400,8 +402,8 @@ begin
       pLed             => open,
       pPsw             => "11",                -- NMI and POWER buttons released
       pkbdtype         => "000",
-      pSramld          => '0',
-      pSramst          => '0',
+      pSramld          => sram_ld,
+      pSramst          => sram_st,
       pMidi_in         => '1',
       pMidi_out        => open,
       pMidi_en         => '0',                 -- MIDI board off (the MiSTer default)
@@ -433,7 +435,7 @@ begin
       opm_sel          => '0',
       mix_fix          => '1',
       disk_mode        => disk_mode,
-      sxsi_inject      => '0',
+      sxsi_inject      => sxsi_inject,
       vis_mem          => "0000"
    );
 

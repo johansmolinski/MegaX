@@ -190,6 +190,9 @@ int main(int argc, char** argv) {
    top->sd_buff_wr = 0;
    top->fd_eject = 0;
    top->fd_sync = 0;
+   top->sram_ld = 0;
+   top->sram_st = 0;
+   top->sxsi_inject = 0;
    top->scan_mode = 0;
    top->ps2_kbd_clk_i = 1;                               // no keyboard: the lines released
    top->ps2_kbd_dat_i = 1;

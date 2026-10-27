@@ -9,10 +9,11 @@
 -- * x68_boot.vhd: /megax/boot.rom from the Shell's ROM auto-loader to the core's loader port
 --   (QNICE device C_DEV_X68_BOOT); the X68000 starts with the first byte and runs once the
 --   firmware has checked the size and ended the load (PREP_START)
--- * x68_sd.vhd: the floppy images of FDD0 and FDD1 straight from the SD card (QNICE devices
---   C_DEV_X68_FDD0/1, the SD host's engine port), served to the core through MiSTer's hps_io
---   sector interface
--- * the OSM settings (config.vhd): FDD0, FDD1, HDMI mode, 68000 at 20 MHz, reset
+-- * x68_sd.vhd: the disk images straight from the SD card (QNICE devices C_DEV_X68_FDD0 ..
+--   C_DEV_X68_SXSI2, one per hps_io slot, the SD host's engine port), served to the core
+--   through MiSTer's hps_io sector interface: FDD0, FDD1, SASI, SxSI 1 and 2, the SRAM image
+-- * the OSM settings (config.vhd): the images, D88 write-back, SRAM load/save, the SxSI
+--   driver, HDMI mode, 68000 at 20 MHz, reset
 --
 -- Resets: the Shell holds the core in reset (main_reset_core_i) while it loads the boot ROM,
 -- but the X68000 must run then: its memory controller writes the ROM into the SDRAM. So the
@@ -331,12 +332,22 @@ architecture synthesis of MEGA65_Core is
 -- scrapes them into osm_const.asm as X68_OSM_*)
 ---------------------------------------------------------------------------------------------
 
-constant C_MENU_FDD0_LN       : natural := 2;   -- " FDD0:%s"
+constant C_MENU_FDD0_LN       : natural := 2;   -- " FDD0:%s" (the firmware's SPACE eject)
 constant C_MENU_FDD1_LN       : natural := 3;   -- " FDD1:%s"
-constant C_MENU_HDMI_720P     : natural := 8;
-constant C_MENU_HDMI_720P50   : natural := 9;
-constant C_MENU_TURBO         : natural := 12;
-constant C_MENU_RESET         : natural := 15;
+constant C_MENU_SASI_LN       : natural := 4;   -- " SASI:%s"
+constant C_MENU_SXSI1_LN      : natural := 5;   -- " SxSI 1:%s"
+constant C_MENU_SXSI2_LN      : natural := 6;   -- " SxSI 2:%s"
+constant C_MENU_SRAM_LN       : natural := 7;   -- " SRAM:%s"
+constant C_MENU_SYNC0         : natural := 12;  -- momentary (the firmware clears them)
+constant C_MENU_SYNC1         : natural := 13;
+constant C_MENU_SRAM_LD       : natural := 14;
+constant C_MENU_SRAM_ST       : natural := 15;
+constant C_MENU_SXSI_INJ      : natural := 16;
+constant C_MENU_SXSI_BOOT     : natural := 17;
+constant C_MENU_HDMI_720P     : natural := 23;
+constant C_MENU_HDMI_720P50   : natural := 24;
+constant C_MENU_TURBO         : natural := 27;
+constant C_MENU_RESET         : natural := 30;
 
 ---------------------------------------------------------------------------------------------
 -- Clocks and resets
@@ -351,6 +362,8 @@ signal video_rst              : std_logic;
 signal scan_locked            : std_logic;
 signal main_x68_reset         : std_logic := '1';
 signal main_fd_motor          : std_logic;
+signal main_boot_ended_d      : std_logic := '0';
+signal main_sxsi_inject       : std_logic := '0';
 
 ---------------------------------------------------------------------------------------------
 -- boot ROM loader
@@ -544,6 +557,18 @@ begin
       end if;
    end process p_reset;
 
+   -- "Inject SxSI driver" (momentary) or "SxSI driver at power-on": the latter as MiSTer's
+   -- sxsi_boot_pulse, once the boot ROM is in (the core takes the rising edge)
+   p_sxsi : process (main_clk)
+   begin
+      if rising_edge(main_clk) then
+         main_boot_ended_d <= main_boot_ended;
+         main_sxsi_inject  <= main_osm_control_i(C_MENU_SXSI_INJ) or
+                              (main_osm_control_i(C_MENU_SXSI_BOOT) and main_boot_ended and
+                               not main_boot_ended_d);
+      end if;
+   end process p_sxsi;
+
    i_main : entity work.main
       port map (
          clk_ram_i            => clk_ram,
@@ -573,6 +598,10 @@ begin
          video_vblank_o       => video_vblank_o,
 
          fd_motor_o           => main_fd_motor,
+         fd_sync_i            => main_osm_control_i(C_MENU_SYNC1) & main_osm_control_i(C_MENU_SYNC0),
+         sram_ld_i            => main_osm_control_i(C_MENU_SRAM_LD),
+         sram_st_i            => main_osm_control_i(C_MENU_SRAM_ST),
+         sxsi_inject_i        => main_sxsi_inject,
 
          img_mounted_i        => main_img_mounted,
          img_readonly_i       => main_img_readonly,
@@ -649,12 +678,12 @@ begin
             qnice_dev_data_o <= qnice_boot_data;
             qnice_dev_wait_o <= qnice_boot_wait;
 
-         when C_DEV_X68_FDD0 | C_DEV_X68_FDD1 =>
+         -- the disk images: device 0x0101 + slot
+         when C_DEV_X68_FDD0 | C_DEV_X68_FDD1 | C_DEV_X68_SASI | C_DEV_X68_SRAM |
+              C_DEV_X68_SXSI1 | C_DEV_X68_SXSI2 =>
             qnice_sd_ce      <= qnice_dev_ce_i;
             qnice_sd_we      <= qnice_dev_we_i;
-            if qnice_dev_id_i = C_DEV_X68_FDD1 then
-               qnice_sd_slot <= "001";
-            end if;
+            qnice_sd_slot    <= std_logic_vector(unsigned(qnice_dev_id_i(2 downto 0)) - 1);
             qnice_dev_data_o <= qnice_sd_data;
 
          when others => null;

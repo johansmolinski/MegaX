@@ -87,6 +87,10 @@ entity main is
       sd_buff_dout_i          : in    std_logic_vector(7 downto 0);
       sd_buff_din_o           : out   std_logic_vector(7 downto 0);
       sd_buff_wr_i            : in    std_logic;
+      fd_sync_i               : in    std_logic_vector(1 downto 0);   -- write D88 changes back
+      sram_ld_i               : in    std_logic;
+      sram_st_i               : in    std_logic;
+      sxsi_inject_i           : in    std_logic;
 
       -- Audio output (clk_sys, signed PCM)
       audio_left_o            : out   signed(15 downto 0);
@@ -293,7 +297,10 @@ begin
          sd_buff_din    => sd_buff_din_o,
          sd_buff_wr     => sd_buff_wr_i,
          fd_eject       => "00",
-         fd_sync        => "00",
+         fd_sync        => fd_sync_i,
+         sram_ld        => sram_ld_i,
+         sram_st        => sram_st_i,
+         sxsi_inject    => sxsi_inject_i,
          fd_motor       => fd_motor_o,
          ps2_kbd_clk_i  => kbd_clk,
          ps2_kbd_dat_i  => kbd_dat,

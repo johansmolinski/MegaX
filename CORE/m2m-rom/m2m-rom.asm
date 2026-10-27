@@ -39,7 +39,11 @@
 ; Firmware: Main Code
 ; ----------------------------------------------------------------------------
 
-START_FIRMWARE  RBRA    START_SHELL, 1
+START_FIRMWARE  MOVE    X68_UNMNT_PREV, R0      ; the eject's state (HANDLE_CORE_IO)
+                MOVE    0, @R0
+                MOVE    X68_SUB_ACTIVE, R0
+                MOVE    0, @R0
+                RBRA    START_SHELL, 1
 
 ; ----------------------------------------------------------------------------
 ; Core specific constants
@@ -72,12 +76,14 @@ SUBMENU_SUMMARY XOR     R8, R8
 FILTER_FILES    XOR     R8, R8
                 RET
 
-; PREP_LOAD_IMAGE: the floppy images of FDD0 and FDD1 (menu lines " FDD0:%s",
-; " FDD1:%s", manual ROM loads 0 and 1 into C_DEV_X68_FDD0/1). Nothing is
-; loaded: x68_sd.vhd reads and writes the file on the SD card through its
-; extent map (FD_SETUP), and the file pointer is left at the end, so the Shell
-; only does the CSR handshake. The core is told D88 (the extension .D88) or a
-; sector image (XDF, DIM, HDM: anything else), as MiSTer's file type does.
+; PREP_LOAD_IMAGE: the disk images (menu lines " FDD0:%s" .. " SRAM:%s",
+; manual ROM loads into C_DEV_X68_FDD0 ..). Nothing is loaded: x68_sd.vhd
+; reads and writes the file on the SD card through its extent map (FD_SETUP),
+; and the file pointer is left at the end, so the Shell only does the CSR
+; handshake. A floppy is D88 (the extension .D88) or a sector image (XDF, DIM,
+; HDM: anything else), as MiSTer's file type tells the core; a floppy is at
+; most 8 MB, the SRAM image exactly 16 KB, a hard disk a whole number of
+; sectors.
 ; Input:  R8: file handle, R9: context (CTX_*), R10: menu group; the caller's
 ;         R2 (this register bank, before INCRB): the file name
 ; Output: R8: 0 = OK, else an error code; R9: image type (0) or the error text
@@ -85,28 +91,42 @@ PREP_LOAD_IMAGE MOVE    R2, R11                 ; R11: the file name (the
                 INCRB                           ; caller's bank)
                 CMP     CTX_LOAD_ROM, R9
                 RBRA    _X68PL_OK, !Z
-                XOR     R1, R1                  ; R1: slot 0 = FDD0, 1 = FDD1
-                CMP     X68_OPTM_G_FDD0, R10
-                RBRA    _X68PL_D, Z
-                MOVE    1, R1
-                CMP     X68_OPTM_G_FDD1, R10
-                RBRA    _X68PL_OK, !Z
-
-_X68PL_D        MOVE    R8, R0                  ; R0: the file handle
-                MOVE    R0, R2                  ; at most 8 MB
-                ADD     FAT32$FDH_SIZE_HI, R2
+                MOVE    R10, R7                 ; R7: group -> R1: slot
+                RSUB    GROUP_SLOT, 1
+                RBRA    _X68PL_OK, !C
+                MOVE    R8, R0                  ; R0: the file handle
+                MOVE    R0, R2                  ; R3:R2: the size
+                ADD     FAT32$FDH_SIZE_LO, R2
                 MOVE    @R2, R2
-                AND     0xFF80, R2
-                RBRA    _X68PL_BIG, !Z
+                MOVE    R0, R3
+                ADD     FAT32$FDH_SIZE_HI, R3
+                MOVE    @R3, R3
 
-                MOVE    R11, R8                 ; R2: 0 = D88, 4 = sector image
-                RSUB    IS_D88, 1               ; (MODE bit 2)
-                MOVE    4, R2
-                RBRA    _X68PL_SET, !C
-                XOR     R2, R2
+                XOR     R4, R4                  ; R4: the MODE bits
+                CMP     2, R1                   ; floppies: slots 0, 1
+                RBRA    _X68PL_NFD, !N
+                MOVE    R3, R5                  ; at most 8 MB
+                AND     0xFF80, R5
+                RBRA    _X68PL_BIG, !Z
+                MOVE    R11, R8                 ; D88 or a sector image
+                RSUB    IS_D88, 1
+                RBRA    _X68PL_SET, C
+                MOVE    4, R4
+                RBRA    _X68PL_SET, 1
+_X68PL_NFD      CMP     3, R1                   ; the SRAM image: 16 KB
+                RBRA    _X68PL_HD, !Z
+                CMP     0x4000, R2
+                RBRA    _X68PL_SRBAD, !Z
+                CMP     0, R3
+                RBRA    _X68PL_SRBAD, !Z
+                RBRA    _X68PL_SET, 1
+_X68PL_HD       MOVE    R2, R5                  ; hard disks: whole sectors
+                AND     0x01FF, R5
+                RBRA    _X68PL_HDBAD, !Z
+
 _X68PL_SET      MOVE    R0, R8                  ; R8: handle, R9: slot,
                 MOVE    R1, R9                  ; R10: the MODE bits
-                MOVE    R2, R10
+                MOVE    R4, R10
                 RSUB    FD_SETUP, 1             ; R8: 0, 1 = too fragmented,
                 XOR     R9, R9                  ; 2 = FAT32 error
                 CMP     0, R8
@@ -120,13 +140,45 @@ _X68PL_SET      MOVE    R0, R8                  ; R8: handle, R9: slot,
 _X68PL_BIG      MOVE    3, R8
                 MOVE    ERR_FD_SIZE, R9
                 RBRA    _X68PL_RET, 1
+_X68PL_SRBAD    MOVE    3, R8
+                MOVE    ERR_SRAM_SIZE, R9
+                RBRA    _X68PL_RET, 1
+_X68PL_HDBAD    MOVE    3, R8
+                MOVE    ERR_HD_SIZE, R9
+                RBRA    _X68PL_RET, 1
 
 _X68PL_OK       XOR     R8, R8
                 XOR     R9, R9
 _X68PL_RET      DECRB
                 RET
 
+; GROUP_SLOT: R7 = a menu group -> C=1 and R1 = its x68_sd slot, or C=0
+; (R0 clobbered)
+GROUP_SLOT      MOVE    GROUP_SLOTS, R0
+_GS_L           CMP     0, @R0
+                RBRA    _GS_NO, Z
+                CMP     @R0++, R7
+                RBRA    _GS_YES, Z
+                ADD     1, R0
+                RBRA    _GS_L, 1
+_GS_YES         MOVE    @R0, R1
+                OR      0x0004, SR
+                RET
+_GS_NO          AND     0xFFFB, SR
+                RET
+
+; menu group, x68_sd slot (hps_io's: 0/1 floppies, 2 SASI, 3 SRAM, 4.. SxSI)
+GROUP_SLOTS     .DW     X68_OPTM_G_FDD0, 0, X68_OPTM_G_FDD1, 1, X68_OPTM_G_SASI, 2
+                .DW     X68_OPTM_G_SXSI1, 4, X68_OPTM_G_SXSI2, 5, X68_OPTM_G_SRAMF, 3
+                .DW     0
+; menu line, x68_sd slot (SPACE eject)
+LINE_SLOTS      .DW     X68_OSM_FDD0_LN, 0, X68_OSM_FDD1_LN, 1, X68_OSM_SASI_LN, 2
+                .DW     X68_OSM_SXSI1_LN, 4, X68_OSM_SXSI2_LN, 5, X68_OSM_SRAM_LN, 3
+                .DW     0xFFFF
+
 ERR_FD_SIZE     .ASCII_W "Not a floppy image (more than 8 MB)"
+ERR_SRAM_SIZE   .ASCII_W "An SRAM image has 16384 bytes"
+ERR_HD_SIZE     .ASCII_W "Not a hard disk image (not whole sectors)"
 ERR_FD_FRAG     .ASCII_W "Image too fragmented (> 127 extents)"
 ERR_FD_FAT      .ASCII_W "FAT32 error mapping the image"
 
@@ -166,7 +218,7 @@ _ISD88_NO       DECRB
 ISD88_EXT       .ASCII_W "D88"
 
 ; FD_SEL: point the RAMROM window at one slot's device
-; Input: R8: slot 0..1 (FDD0, FDD1), R9: window (FD_REGWIN or FD_MAPWIN);
+; Input: R8: slot 0..7 (hps_io's), R9: window (FD_REGWIN or FD_MAPWIN);
 ; registers preserved
 FD_SEL          INCRB
                 MOVE    FD_DEV_TAB, R0
@@ -178,7 +230,8 @@ FD_SEL          INCRB
                 DECRB
                 RET
 
-FD_DEV_TAB      .DW     X68_DEV_FDD0, X68_DEV_FDD1
+FD_DEV_TAB      .DW     X68_DEV_FDD0, X68_DEV_FDD1, X68_DEV_SASI, X68_DEV_SRAM
+                .DW     X68_DEV_SXSI1, X68_DEV_SXSI2
 FD_REGWIN       .EQU    0x0000
 FD_MAPWIN       .EQU    0x0001
 FD_MODE         .EQU    0x8000                  ; bit 0 on, bit 1 the card in slot 1,
@@ -193,7 +246,7 @@ FD_MAPW         .EQU    512                     ; map words: 127 extents
 ; of cluster 0 (DEV_CLUSTER - (2 << shift)), the cluster size, the file size
 ; and the card; the mode goes last (it mounts the image in the core). The
 ; handle is moved to the end of the file.
-; Input:  R8: file handle, R9: slot 0..1, R10: MODE bits besides on and card
+; Input:  R8: file handle, R9: slot 0..7, R10: MODE bits besides on and card
 ;         (bit 2: a sector image)
 ; Output: R8: 0 = OK, 1 = more extents than the map holds, 2 = FAT32 error;
 ;         R9 clobbered, R10..R12 preserved (the RAMROM selection is changed)
@@ -371,18 +424,28 @@ ERR_BOOT_TAKE   .ASCII_W "The X68000 did not take /megax/boot.rom"
 ; OSM_SEL_PRE / OSM_SEL_POST: R8 = the selected group, R9 = the selected item
 ; (single-select: 1 = selected), R10 = the key. Output R8/R9: 0 = OK.
 ;
-; "Reset the X68000" is momentary: OSM_SEL_POST resets the core through the
-; CSR and unselects the item again (M2M$FORCE_MENU), like Megamiga's reload
-; item.
+; Momentary items (MOMENTARY): OSM_SEL_POST holds the item's bit for about
+; 10 ms (the core samples it as a level, like MiSTer's "R" options) and
+; unselects it again (M2M$FORCE_MENU), like Megamiga's reload item; "Reset the
+; X68000" resets the core through the CSR instead.
 ; ----------------------------------------------------------------------------
 
-OSM_SEL_PRE     XOR     R8, R8
+OSM_SEL_PRE     MOVE    X68_SUB_ACTIVE, R8      ; a browser/help page may run now:
+                MOVE    1, @R8                  ; no SPACE eject (HANDLE_CORE_IO)
+                XOR     R8, R8
                 XOR     R9, R9
                 RET
 
 OSM_SEL_POST    INCRB
+                MOVE    X68_SUB_ACTIVE, R0      ; (every path out of OPTM_CB_SEL)
+                MOVE    0, @R0
+                MOVE    MOMENTARY, R0           ; a momentary item?
+_X68OSP_M       CMP     0, @R0
+                RBRA    _X68OSP_RET, Z
+                CMP     @R0++, R8
+                RBRA    _X68OSP_M, !Z
                 CMP     X68_OPTM_G_RESET, R8
-                RBRA    _X68OSP_RET, !Z
+                RBRA    _X68OSP_HOLD, !Z
 
                 MOVE    M2M$CSR, R0             ; reset the core..
                 OR      M2M$CSR_RESET, @R0
@@ -390,8 +453,16 @@ OSM_SEL_POST    INCRB
 _X68OSP_WAIT    SUB     1, R1
                 RBRA    _X68OSP_WAIT, !Z
                 AND     M2M$CSR_UN_RESET, @R0
+                RBRA    _X68OSP_CLR, 1
 
-                MOVE    OPTM_CUR_SEL, R8        ; momentary: unselect again
+_X68OSP_HOLD    MOVE    10, R2                  ; the core sees the item's bit for
+_X68OSP_H1      MOVE    0x2000, R1              ; about 10 ms (MiSTer's "R"
+_X68OSP_H2      SUB     1, R1                   ; options are levels, too)
+                RBRA    _X68OSP_H2, !Z
+                SUB     1, R2
+                RBRA    _X68OSP_H1, !Z
+
+_X68OSP_CLR     MOVE    OPTM_CUR_SEL, R8        ; momentary: unselect again
                 MOVE    @R8, R8
                 XOR     R9, R9
                 RSUB    M2M$FORCE_MENU, 1
@@ -406,6 +477,10 @@ _X68OSP_RET     XOR     R8, R8
                 DECRB
                 RET
 
+; the momentary items: reset, D88 write-back, SRAM load/save, SxSI driver
+MOMENTARY       .DW     X68_OPTM_G_RESET, X68_OPTM_G_SYNC0, X68_OPTM_G_SYNC1
+                .DW     X68_OPTM_G_SRAMLD, X68_OPTM_G_SRAMST, X68_OPTM_G_SXSIINJ, 0
+
 ; ----------------------------------------------------------------------------
 ; Core specific callback functions: Custom messages, background work, the
 ; settings file
@@ -416,8 +491,91 @@ CUSTOM_MSG      XOR     R8, R8
                 RET
 
 ; HANDLE_CORE_IO (M2M-UPSTREAM core-io-hook): the Shell's time slice for
-; background work (none yet). Must preserve all registers.
-HANDLE_CORE_IO  RET
+; background work. Must preserve all registers.
+;
+; SPACE on a mounted image line ejects it (PC10-III's, after Megamiga's
+; HANDLE_UNMOUNT_KEY): the Shell has no unmount path for manual ROM loads (it
+; opens the browser), so the key is taken here. The Shell calls this at the top
+; of every menu key-wait iteration, before its KEYB$SCAN, so setting the SPACE
+; bit in KEYB_PRESSED hides the press from the menu. All gates must hold: the
+; menu open, no browser/help page running (X68_SUB_ACTIVE, set by
+; OSM_SEL_PRE), the cursor on an image line, the slot mounted (PARSEST =
+; PT_OK; an empty line lets SPACE open the browser as before), and a new press
+; (X68_UNMNT_PREV). The eject: the slot off (x68_sd.vhd gives the core
+; img_mounted with size 0, hps_io's unmount) and the load status idle.
+HANDLE_CORE_IO  MOVE    R8, @--SP
+                MOVE    R9, @--SP
+                MOVE    R10, @--SP
+                INCRB
+
+                MOVE    M2M$KEYBOARD, R0        ; SPACE now (low active), latched
+                MOVE    @R0, R0                 ; every call, so opening the menu
+                NOT     R0, R0                  ; with SPACE held is no new press
+                AND     M2M$KEY_SPACE, R0
+                MOVE    R0, R4                  ; R4: SPACE now
+                MOVE    X68_UNMNT_PREV, R1
+                MOVE    @R1, R5                 ; R5: SPACE at the last call
+                MOVE    R4, @R1
+
+                MOVE    M2M$CSR, R0             ; the menu open?
+                MOVE    @R0, R0
+                AND     M2M$CSR_OSM, R0
+                RBRA    _HCIO_RET_NS, Z
+                MOVE    X68_SUB_ACTIVE, R0      ; no browser/help page?
+                CMP     0, @R0
+                RBRA    _HCIO_RET_NS, !Z
+
+                MOVE    OPTM_CUR_SEL, R0        ; the cursor on an image line?
+                MOVE    @R0, R0                 ; R2: its slot
+                MOVE    LINE_SLOTS, R1
+_HCIO_L         CMP     0xFFFF, @R1
+                RBRA    _HCIO_RET_NS, Z
+                CMP     @R1++, R0
+                RBRA    _HCIO_F, Z
+                ADD     1, R1
+                RBRA    _HCIO_L, 1
+_HCIO_F         MOVE    @R1, R2
+
+                MOVE    M2M$RAMROM_DEV, R0      ; keep the RAMROM selection
+                MOVE    @R0, R6
+                MOVE    M2M$RAMROM_4KWIN, R0
+                MOVE    @R0, R7
+
+                MOVE    FD_DEV_TAB, R8          ; mounted?
+                ADD     R2, R8
+                MOVE    @R8, R8
+                MOVE    R8, R3                  ; R3: the slot's device
+                MOVE    CRTROM_CSR_PARSEST, R9
+                RSUB    CRTROM_CSR_R, 1
+                CMP     CRTROM_CSR_PT_OK, R10
+                RBRA    _HCIO_RET, !Z
+
+                MOVE    KEYB_PRESSED, R0        ; hide the SPACE from the menu
+                OR      M2M$KEY_SPACE, @R0      ; (every call: no read skew)
+                CMP     0, R4                   ; a new press?
+                RBRA    _HCIO_RET, Z
+                CMP     0, R5
+                RBRA    _HCIO_RET, !Z
+
+                MOVE    R2, R8                  ; eject: the slot off..
+                MOVE    FD_REGWIN, R9
+                RSUB    FD_SEL, 1
+                MOVE    FD_MODE, R0
+                MOVE    0, @R0
+                MOVE    R3, R8                  ; ..and the load status idle: the
+                MOVE    CRTROM_CSR_STATUS, R9   ; Shell shows the line empty again
+                MOVE    CRTROM_CSR_ST_IDLE, R10
+                RSUB    CRTROM_CSR_W, 1
+
+_HCIO_RET       MOVE    M2M$RAMROM_DEV, R0
+                MOVE    R6, @R0
+                MOVE    M2M$RAMROM_4KWIN, R0
+                MOVE    R7, @R0
+_HCIO_RET_NS    DECRB
+                MOVE    @SP++, R10
+                MOVE    @SP++, R9
+                MOVE    @SP++, R8
+                RET
 
 ; CFG_SIGCHECK (M2M-UPSTREAM cfg-strings): C=1 = the settings file R8 (open,
 ; its text loaded by CFGS_LOAD) belongs to this menu: its text has the line
@@ -456,10 +614,11 @@ CFG_SIGSET      SYSCALL(enter, 1)
 
 ; The menu's layout version (config.vhd): change it with every change of the
 ; menu lines. "1": 15 lines (HDMI submenu, 68000 at 20 MHz, help, reset).
-; "2": 18 lines, FDD0 and FDD1 at lines 2-3.
+; "2": 18 lines, FDD0 and FDD1 at lines 2-3. "3": 33 lines, the images FDD0,
+; FDD1, SASI, SxSI 1, SxSI 2, SRAM at lines 2-7, the "Disks and SRAM" submenu.
 ; At most 3 characters (CFG_SIGCHECK's buffer).
 CFG_SIG_KEY     .ASCII_W "menu"
-CFG_SIG_VAL     .ASCII_W "2"
+CFG_SIG_VAL     .ASCII_W "3"
 
 ; ----------------------------------------------------------------------------
 ; The FAT32 write layer, flat (the Shell creates and resizes the settings
@@ -489,12 +648,15 @@ END_OF_ROM      .DW 0
 
 #include "../../M2M/rom/shell_vars.asm"
 
+X68_UNMNT_PREV  .BLOCK 1                        ; SPACE at the last HANDLE_CORE_IO
+X68_SUB_ACTIVE  .BLOCK 1                        ; 1: a browser/help page runs
+
 ; The menu heap (Megamiga hard rule 11): the menu structure plus OPTM_HEAP;
-; for this 18-line menu the demand is about 20 + 230 item characters + 1 +
-; 4 x 18 + 1 + (1 submenu + 2 manual ROMs + 1) x 30 = 444 words; the Shell
+; for this 33-line menu the demand is about 20 + 470 item characters + 1 +
+; 4 x 33 + 1 + (2 submenus + 6 manual ROMs + 1) x 30 = 894 words; the Shell
 ; checks it at boot (ERR_FATAL_HEAP1/2). The rest of the heap is the file
 ; browser's.
-MENU_HEAP_SIZE  .EQU 640
+MENU_HEAP_SIZE  .EQU 1024
 
 #ifndef RELEASE
 HEAP_SIZE       .EQU 0
@@ -504,7 +666,7 @@ HEAP            .BLOCK 1
 ; STACK_SIZE (check HEAP and VAR$STACK_START in m2m-rom.lis). PC10-III's
 ; budget (19296 + its 1280 menu words), less its 412 words of hard disk
 ; variables that MegaX does not have, rounded down.
-HEAP_SIZE       .EQU 20352
+HEAP_SIZE       .EQU 19968
 HEAP            .BLOCK 1
 
                 .ORG    0xFED0                  ; as Megamiga: the FAT32 write layer's
