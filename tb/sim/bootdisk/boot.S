@@ -6,7 +6,8 @@
 | device. This one starts with a BRA over its name, uses only the IOCS and
 | the text VRAM, so a frame shows the whole path - floppy emulator, 68000, CGROM
 | font, text VRAM, palette, video - without any copyrighted disk:
-|   _CRTMOD 16 (768x512, 16 colours, 31 kHz), cursor off, a line of text at (4,4),
+|   _CRTMOD 16 (768x512, 16 colours, 31 kHz), text colours 0-4 set (_CRTMOD leaves
+|   them all black), cursor off, a line of text at (4,4),
 |   then 64 lines of four-colour bars (text colours 0..3) from line 400.
 | GNU as, MIT syntax: m68k-linux-gnu-as -m68000 boot.S (tb/sim/Makefile).
 
@@ -20,6 +21,14 @@ start:
 	moveq	#0x10,%d0		| IOCS _CRTMOD
 	moveq	#16,%d1			| mode 16: 768x512, 16 colours, 31 kHz
 	trap	#15
+	| _CRTMOD leaves the text palette all 0 (black): our own colours,
+	| GGGGG RRRRR BBBBB I
+	lea	0xe82200,%a0
+	movew	#0x0000,%a0@+		| 0 black
+	movew	#0xfffe,%a0@+		| 1 white
+	movew	#0x07c0,%a0@+		| 2 red
+	movew	#0xf800,%a0@+		| 3 green
+	movew	#0x003e,%a0@+		| 4 blue
 	moveq	#0x1f,%d0		| IOCS _B_CUROFF
 	trap	#15
 	moveq	#0x23,%d0		| IOCS _B_LOCATE (d1 = x, d2 = y)
