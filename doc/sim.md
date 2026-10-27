@@ -88,3 +88,26 @@ from `../../X68000_MiSTerMEGA65/...`, the path Vivado sees from
 - Runs go to the Fedora host: `tools/remote/rsim.sh start <name> run MS=...`,
   `wait`, `fetch` (log and frames as PNG). One Verilator thread: 0.56 s per
   simulated ms there; four threads on the shared host were 100 times slower.
+
+## The MEGA65 shell's own tests (tb/shell)
+
+ghdl testbenches for the shell entities in `CORE/vhdl`, against stand-ins for Vivado's
+UNISIM/XPM primitives (`unisim_stub.vhd`, `xpm_stub.vhd`). Run them on the Fedora host
+(each takes seconds to minutes):
+
+- `check.sh`: analyses and elaborates the whole design (`MEGA65_Core` with the machine and
+  the M2M packages it uses) in about 8 s: the syntax and type check before a Vivado run.
+- `run_keyboard.sh` (`tb_keyboard.vhd`): `keyboard.vhd` against the core's own PS/2 host
+  (KBCONV, PS2IF, the MiSTer layout ROMs) and an MFP-style reader: the key codes the X68000
+  gets, BREAK, the MEGA layer, typematic repeat. Two simulation-only copies: PS2IF
+  (`ps2if_sim.py`: a counter goes below its range once, which wraps harmlessly in the FPGA)
+  and KBCONV (`kbconv_sim.py`: `KBWAIT_CMD` gets the FPGA's power-up value 0).
+- `run_boot.sh` (`tb_boot.vhd`): `x68_boot.vhd` with x68_system's loader glue and a core
+  that acknowledges each byte after 3..40 clocks: every byte at its address, the end
+  handshake.
+- `run_sd.sh` (`tb_sd.vhd`): `x68_sd.vhd` with an SD host engine-port model and a core model
+  speaking hps_io's sector protocol: the mount pulse, the extent-map arithmetic across two
+  extents, reads, a write, an LBA beyond the file.
+
+Vivado problems are narrowed down with out-of-context syntheses (`tools/synth/ooc.tcl`,
+`tools/synth/mkwrap.py` for a pass-through wrapper), about a minute each on the host.

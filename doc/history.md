@@ -188,3 +188,26 @@ our vendored framework port for port), in `CORE/vhdl`:
   first suspect; they are ASYNC_REG now, `4ac6d27`, which is right for Xilinx
   anyway.) Out of context, x68_system takes 32.4k LUTs, 17.4k registers, 267
   block RAM tiles (208 RAMB36 + 118 RAMB18), 3 DSPs.
+
+## 2026-10-27 - Floppy images from the SD card (phase 3 begins)
+
+With no disk the X68000 shows nothing (the IPL leaves contrast and palette at 0 and
+waits for a disk), so a floppy is what makes the hardware visibly testable.
+
+- `x68_sd.vhd`: PC10-III's `pc_fdd_sd` engine (extent map -> SD block, single-block
+  transfers through the SD host's engine port, retries, a toggle handshake between the
+  QNICE and main clocks) generalised to MiSTer's eight hps_io slots with 32-bit LBAs and
+  127 extents per slot (two RAMB36 of maps for all eight), and with MiSTer's interface on
+  the core side: `img_mounted` per MODE write with the exact file size (D88 files are not
+  whole sectors), `img_xdf`, `img_readonly`; a read streams 512 bytes with a
+  `sd_buff_wr` every fourth clock between `sd_ack` rising and falling (the pacing of the
+  testbench's server, which the core has run against since phase 1); a write collects
+  the core's bytes (`sd_buff_din` two clocks after `sd_buff_addr`) and keeps `sd_ack` up
+  until the block is on the card. The core's protocol has no error path (neither has
+  hps_io): a failed or out-of-range read delivers zeros.
+- Menu lines FDD0 and FDD1 (manual "ROM" loads into `C_DEV_X68_FDD0/1`); the firmware's
+  PREP_LOAD_IMAGE hands the file over with PC10-III's FD_SETUP and tells the core D88 by
+  the extension `.D88`, a sector image (XDF/DIM/HDM) otherwise, as MiSTer does by file
+  type. Menu signature 2 (18 lines).
+- The drive LED is the X68000's floppy motor (MiSTer's user LED).
+- `tb/shell/tb_sd`: PASS.
