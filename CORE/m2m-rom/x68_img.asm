@@ -30,25 +30,30 @@
 ; ****************************************************************************
 
 IMG_PLEN        .EQU    128                     ; IMG_PATH: at most 127 characters
-IMG_N           .EQU    6                       ; image lines
+IMG_N           .EQU    8                       ; image lines
 
 ; per image i (= the manual ROM's index, the order of the menu's image lines):
 ; its key, its menu group, its QNICE device, the Shell's file handle
-IMG_KEYS        .DW     IMG_K0, IMG_K1, IMG_K2, IMG_K3, IMG_K4, IMG_K5
+IMG_KEYS        .DW     IMG_K0, IMG_K1, IMG_K2, IMG_K3, IMG_K4, IMG_K5, IMG_K6, IMG_K7
 IMG_GROUPS      .DW     X68_OPTM_G_FDD0, X68_OPTM_G_FDD1, X68_OPTM_G_SASI
-                .DW     X68_OPTM_G_SXSI1, X68_OPTM_G_SXSI2, X68_OPTM_G_SRAMF
+                .DW     X68_OPTM_G_SXSI1, X68_OPTM_G_SXSI2, X68_OPTM_G_SXSI3
+                .DW     X68_OPTM_G_SXSI4, X68_OPTM_G_SRAMF
 IMG_DEVS        .DW     X68_DEV_FDD0, X68_DEV_FDD1, X68_DEV_SASI
-                .DW     X68_DEV_SXSI1, X68_DEV_SXSI2, X68_DEV_SRAM
+                .DW     X68_DEV_SXSI1, X68_DEV_SXSI2, X68_DEV_SXSI3
+                .DW     X68_DEV_SXSI4, X68_DEV_SRAM
 IMG_HANDLES     .DW     HANDLE_RM_FILE1, HANDLE_RM_FILE2, HANDLE_RM_FILE3
                 .DW     HANDLE_RM_FILE4, HANDLE_RM_FILE5, HANDLE_RM_FILE6
-IMG_BITS        .DW     0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020
+                .DW     HANDLE_RM_FILE7, HANDLE_RM_FILE8
+IMG_BITS        .DW     0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080
 
 IMG_K0          .ASCII_W "fdd0"
 IMG_K1          .ASCII_W "fdd1"
 IMG_K2          .ASCII_W "sasi"
 IMG_K3          .ASCII_W "sxsi1"
 IMG_K4          .ASCII_W "sxsi2"
-IMG_K5          .ASCII_W "sram"
+IMG_K5          .ASCII_W "sxsi3"
+IMG_K6          .ASCII_W "sxsi4"
+IMG_K7          .ASCII_W "sram"
 IMG_NONE        .DW     0                       ; the empty value removes the key
 IMG_UP          .ASCII_W ".."
 IMG_S_ERR       .ASCII_W "\nNot mounted again:\n"

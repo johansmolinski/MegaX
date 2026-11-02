@@ -203,40 +203,42 @@ constant OPTM_S_SAVING     : string := "<Saving>";
 --     4  SASI:%s                  SASI hard disk, .HDF (load 2, slot 2)
 --     5  SxSI 1:%s                SxSI hard disk 1, .HDS (load 3, slot 4)
 --     6  SxSI 2:%s                SxSI hard disk 2, .HDS (load 4, slot 5)
---     7  SRAM:%s                  the SRAM image, 16 KB (load 5, slot 3)
---     8  ----                     
---     9  Disks and SRAM           submenu
---    10  Disks and SRAM           headline
---    11  ----                     
---    12  Save FDD0 changes (D88)  C_MENU_SYNC0 (momentary: fd_sync(0))
---    13  Save FDD1 changes (D88)  C_MENU_SYNC1 (momentary)
---    14  Load SRAM from SD card   C_MENU_SRAM_LD (momentary: pSramld)
---    15  Save SRAM to SD card     C_MENU_SRAM_ST (momentary: pSramst)
---    16  Inject SxSI driver       C_MENU_SXSI_INJ (momentary: sxsi_inject)
---    17  SxSI driver at power-on  C_MENU_SXSI_BOOT (default off)
---    18  ----                     
---    19  Back to main menu        
---    20  HDMI: %s                 submenu
---    21  HDMI mode                headline
---    22  ----                     
---    23  720p 60 Hz 16:9          C_MENU_HDMI_720P (default)
---    24  720p 50 Hz 16:9          C_MENU_HDMI_720P50
---    25  ----                     
---    26  Back to main menu        
---    27  68000 at 20 MHz          C_MENU_TURBO (MiSTer's "Turbo"; default off: 10 MHz)
---    28  ----                     
---    29  Help                     
---    30  Reset the X68000         C_MENU_RESET (momentary: the firmware resets and clears it)
---    31  ----                     
---    32  Close Menu               
+--     7  SxSI 3:%s                SxSI hard disk 3, .HDS (load 5, slot 6)
+--     8  SxSI 4:%s                SxSI hard disk 4, .HDS (load 6, slot 7)
+--     9  SRAM:%s                  the SRAM image, 16 KB (load 7, slot 3)
+--    10  ----                     
+--    11  Disks and SRAM           submenu
+--    12  Disks and SRAM           headline
+--    13  ----                     
+--    14  Save FDD0 changes (D88)  C_MENU_SYNC0 (momentary: fd_sync(0))
+--    15  Save FDD1 changes (D88)  C_MENU_SYNC1 (momentary)
+--    16  Load SRAM from SD card   C_MENU_SRAM_LD (momentary: pSramld)
+--    17  Save SRAM to SD card     C_MENU_SRAM_ST (momentary: pSramst)
+--    18  Inject SxSI driver       C_MENU_SXSI_INJ (momentary: sxsi_inject)
+--    19  SxSI driver at power-on  C_MENU_SXSI_BOOT (default off)
+--    20  ----                     
+--    21  Back to main menu        
+--    22  HDMI: %s                 submenu
+--    23  HDMI mode                headline
+--    24  ----                     
+--    25  720p 60 Hz 16:9          C_MENU_HDMI_720P (default)
+--    26  720p 50 Hz 16:9          C_MENU_HDMI_720P50
+--    27  ----                     
+--    28  Back to main menu        
+--    29  68000 at 20 MHz          C_MENU_TURBO (MiSTer's "Turbo"; default off: 10 MHz)
+--    30  ----                     
+--    31  Help                     
+--    32  Reset the X68000         C_MENU_RESET (momentary: the firmware resets and clears it)
+--    33  ----                     
+--    34  Close Menu               
 --
 -- The settings file keeps one byte per line, so the layout is part of its format: the
 -- firmware's CFG_SIGCHECK accepts only a file whose text carries this menu's signature
 -- (m2m-rom.asm, CFG_SIG_VAL; change it with every layout change), any other file is reset to
 -- the defaults.
-constant OPTM_SIZE         : natural := 33;
+constant OPTM_SIZE         : natural := 35;
 constant OPTM_DX           : natural := 30;
-constant OPTM_DY           : natural := 17;   -- the visible main menu (lines 0-9, 20, 27-32)
+constant OPTM_DY           : natural := 19;   -- the visible main menu (lines 0-11, 22, 29-34)
 
 constant OPTM_ITEMS        : string :=
    " MegaX\n"                    &
@@ -246,6 +248,8 @@ constant OPTM_ITEMS        : string :=
    " SASI:%s\n"                  &
    " SxSI 1:%s\n"                &
    " SxSI 2:%s\n"                &
+   " SxSI 3:%s\n"                &
+   " SxSI 4:%s\n"                &
    " SRAM:%s\n"                  &
    "\n"                          &
    " Disks and SRAM\n"           &
@@ -289,6 +293,8 @@ constant OPTM_G_SRAMLD     : integer := 12;
 constant OPTM_G_SRAMST     : integer := 13;
 constant OPTM_G_SXSIINJ    : integer := 14;
 constant OPTM_G_SXSIBOOT   : integer := 15;
+constant OPTM_G_SXSI3      : integer := 16;
+constant OPTM_G_SXSI4      : integer := 17;
 
 type OPTM_GTYPE is array (0 to OPTM_SIZE - 1) of integer range 0 to 2**OPTM_GTC- 1;
 
@@ -300,32 +306,34 @@ constant OPTM_GROUPS       : OPTM_GTYPE := (
                                              OPTM_G_SASI + OPTM_G_LOAD_ROM,            --  4 SASI:%s
                                              OPTM_G_SXSI1 + OPTM_G_LOAD_ROM,           --  5 SxSI 1:%s
                                              OPTM_G_SXSI2 + OPTM_G_LOAD_ROM,           --  6 SxSI 2:%s
-                                             OPTM_G_SRAMF + OPTM_G_LOAD_ROM,           --  7 SRAM:%s
-                                             OPTM_G_LINE,                              --  8
-                                             OPTM_G_SUBMENU,                           --  9 Disks and SRAM
-                                             OPTM_G_TEXT + OPTM_G_HEADLINE,            -- 10 Disks and SRAM
-                                             OPTM_G_LINE,                              -- 11
-                                             OPTM_G_SYNC0 + OPTM_G_SINGLESEL,          -- 12 Save FDD0 changes (D88)
-                                             OPTM_G_SYNC1 + OPTM_G_SINGLESEL,          -- 13 Save FDD1 changes (D88)
-                                             OPTM_G_SRAMLD + OPTM_G_SINGLESEL,         -- 14 Load SRAM from SD card
-                                             OPTM_G_SRAMST + OPTM_G_SINGLESEL,         -- 15 Save SRAM to SD card
-                                             OPTM_G_SXSIINJ + OPTM_G_SINGLESEL,        -- 16 Inject SxSI driver
-                                             OPTM_G_SXSIBOOT + OPTM_G_SINGLESEL,       -- 17 SxSI driver at power-on
-                                             OPTM_G_LINE,                              -- 18
-                                             OPTM_G_CLOSE + OPTM_G_SUBMENU,            -- 19 Back to main menu
-                                             OPTM_G_SUBMENU,                           -- 20 HDMI: %s
-                                             OPTM_G_TEXT + OPTM_G_HEADLINE,            -- 21 HDMI mode
-                                             OPTM_G_LINE,                              -- 22
-                                             OPTM_G_HDMI + OPTM_G_STDSEL,              -- 23 720p 60 Hz 16:9
-                                             OPTM_G_HDMI,                              -- 24 720p 50 Hz 16:9
-                                             OPTM_G_LINE,                              -- 25
-                                             OPTM_G_CLOSE + OPTM_G_SUBMENU,            -- 26 Back to main menu
-                                             OPTM_G_TURBO + OPTM_G_SINGLESEL,          -- 27 68000 at 20 MHz
-                                             OPTM_G_LINE,                              -- 28
-                                             OPTM_G_HELP,                              -- 29 Help
-                                             OPTM_G_RESET + OPTM_G_SINGLESEL,          -- 30 Reset the X68000
-                                             OPTM_G_LINE,                              -- 31
-                                             OPTM_G_CLOSE                              -- 32 Close Menu
+                                             OPTM_G_SXSI3 + OPTM_G_LOAD_ROM,           --  7 SxSI 3:%s
+                                             OPTM_G_SXSI4 + OPTM_G_LOAD_ROM,           --  8 SxSI 4:%s
+                                             OPTM_G_SRAMF + OPTM_G_LOAD_ROM,           --  9 SRAM:%s
+                                             OPTM_G_LINE,                              -- 10
+                                             OPTM_G_SUBMENU,                           -- 11 Disks and SRAM
+                                             OPTM_G_TEXT + OPTM_G_HEADLINE,            -- 12 Disks and SRAM
+                                             OPTM_G_LINE,                              -- 13
+                                             OPTM_G_SYNC0 + OPTM_G_SINGLESEL,          -- 14 Save FDD0 changes (D88)
+                                             OPTM_G_SYNC1 + OPTM_G_SINGLESEL,          -- 15 Save FDD1 changes (D88)
+                                             OPTM_G_SRAMLD + OPTM_G_SINGLESEL,         -- 16 Load SRAM from SD card
+                                             OPTM_G_SRAMST + OPTM_G_SINGLESEL,         -- 17 Save SRAM to SD card
+                                             OPTM_G_SXSIINJ + OPTM_G_SINGLESEL,        -- 18 Inject SxSI driver
+                                             OPTM_G_SXSIBOOT + OPTM_G_SINGLESEL,       -- 19 SxSI driver at power-on
+                                             OPTM_G_LINE,                              -- 20
+                                             OPTM_G_CLOSE + OPTM_G_SUBMENU,            -- 21 Back to main menu
+                                             OPTM_G_SUBMENU,                           -- 22 HDMI: %s
+                                             OPTM_G_TEXT + OPTM_G_HEADLINE,            -- 23 HDMI mode
+                                             OPTM_G_LINE,                              -- 24
+                                             OPTM_G_HDMI + OPTM_G_STDSEL,              -- 25 720p 60 Hz 16:9
+                                             OPTM_G_HDMI,                              -- 26 720p 50 Hz 16:9
+                                             OPTM_G_LINE,                              -- 27
+                                             OPTM_G_CLOSE + OPTM_G_SUBMENU,            -- 28 Back to main menu
+                                             OPTM_G_TURBO + OPTM_G_SINGLESEL,          -- 29 68000 at 20 MHz
+                                             OPTM_G_LINE,                              -- 30
+                                             OPTM_G_HELP,                              -- 31 Help
+                                             OPTM_G_RESET + OPTM_G_SINGLESEL,          -- 32 Reset the X68000
+                                             OPTM_G_LINE,                              -- 33
+                                             OPTM_G_CLOSE                              -- 34 Close Menu
                                            );
 
 -- M2M-UPSTREAM menu-rows (Megamiga, M2M/rom/menu_rows.asm): radio groups drawn as a row. None

@@ -10,8 +10,8 @@
 --   (QNICE device C_DEV_X68_BOOT); the X68000 starts with the first byte and runs once the
 --   firmware has checked the size and ended the load (PREP_START)
 -- * x68_sd.vhd: the disk images straight from the SD card (QNICE devices C_DEV_X68_FDD0 ..
---   C_DEV_X68_SXSI2, one per hps_io slot, the SD host's engine port), served to the core
---   through MiSTer's hps_io sector interface: FDD0, FDD1, SASI, SxSI 1 and 2, the SRAM image
+--   C_DEV_X68_SXSI4, one per hps_io slot, the SD host's engine port), served to the core
+--   through MiSTer's hps_io sector interface: FDD0, FDD1, SASI, SxSI 1-4, the SRAM image
 -- * the OSM settings (config.vhd): the images, D88 write-back, SRAM load/save, the SxSI
 --   driver, HDMI mode, 68000 at 20 MHz, reset
 --
@@ -337,17 +337,19 @@ constant C_MENU_FDD1_LN       : natural := 3;   -- " FDD1:%s"
 constant C_MENU_SASI_LN       : natural := 4;   -- " SASI:%s"
 constant C_MENU_SXSI1_LN      : natural := 5;   -- " SxSI 1:%s"
 constant C_MENU_SXSI2_LN      : natural := 6;   -- " SxSI 2:%s"
-constant C_MENU_SRAM_LN       : natural := 7;   -- " SRAM:%s"
-constant C_MENU_SYNC0         : natural := 12;  -- momentary (the firmware clears them)
-constant C_MENU_SYNC1         : natural := 13;
-constant C_MENU_SRAM_LD       : natural := 14;
-constant C_MENU_SRAM_ST       : natural := 15;
-constant C_MENU_SXSI_INJ      : natural := 16;
-constant C_MENU_SXSI_BOOT     : natural := 17;
-constant C_MENU_HDMI_720P     : natural := 23;
-constant C_MENU_HDMI_720P50   : natural := 24;
-constant C_MENU_TURBO         : natural := 27;
-constant C_MENU_RESET         : natural := 30;
+constant C_MENU_SXSI3_LN      : natural := 7;   -- " SxSI 3:%s"
+constant C_MENU_SXSI4_LN      : natural := 8;   -- " SxSI 4:%s"
+constant C_MENU_SRAM_LN       : natural := 9;   -- " SRAM:%s"
+constant C_MENU_SYNC0         : natural := 14;  -- momentary (the firmware clears them)
+constant C_MENU_SYNC1         : natural := 15;
+constant C_MENU_SRAM_LD       : natural := 16;
+constant C_MENU_SRAM_ST       : natural := 17;
+constant C_MENU_SXSI_INJ      : natural := 18;
+constant C_MENU_SXSI_BOOT     : natural := 19;
+constant C_MENU_HDMI_720P     : natural := 25;
+constant C_MENU_HDMI_720P50   : natural := 26;
+constant C_MENU_TURBO         : natural := 29;
+constant C_MENU_RESET         : natural := 32;
 
 ---------------------------------------------------------------------------------------------
 -- Clocks and resets
@@ -701,7 +703,7 @@ begin
 
          -- the disk images: device 0x0101 + slot
          when C_DEV_X68_FDD0 | C_DEV_X68_FDD1 | C_DEV_X68_SASI | C_DEV_X68_SRAM |
-              C_DEV_X68_SXSI1 | C_DEV_X68_SXSI2 =>
+              C_DEV_X68_SXSI1 | C_DEV_X68_SXSI2 | C_DEV_X68_SXSI3 | C_DEV_X68_SXSI4 =>
             qnice_sd_ce      <= qnice_dev_ce_i;
             qnice_sd_we      <= qnice_dev_we_i;
             qnice_sd_slot    <= std_logic_vector(unsigned(qnice_dev_id_i(2 downto 0)) - 1);

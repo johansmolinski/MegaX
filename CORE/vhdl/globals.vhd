@@ -111,6 +111,8 @@ constant C_DEV_X68_SASI       : std_logic_vector(15 downto 0) := x"0103";
 constant C_DEV_X68_SRAM       : std_logic_vector(15 downto 0) := x"0104";
 constant C_DEV_X68_SXSI1      : std_logic_vector(15 downto 0) := x"0105";
 constant C_DEV_X68_SXSI2      : std_logic_vector(15 downto 0) := x"0106";
+constant C_DEV_X68_SXSI3      : std_logic_vector(15 downto 0) := x"0107";
+constant C_DEV_X68_SXSI4      : std_logic_vector(15 downto 0) := x"0108";
 -- The 68000 bus trace for the bring-up (x68_trace.vhd): the last 1024 bus cycles; read with the
 -- QNICE monitor (tools/trace.py)
 constant C_DEV_X68_DEBUG      : std_logic_vector(15 downto 0) := x"0110";
@@ -142,15 +144,17 @@ constant C_CRTROMTYPE_MANDATORY  : std_logic_vector(15 downto 0) := x"0003";
 constant C_CRTROMTYPE_OPTIONAL   : std_logic_vector(15 downto 0) := x"0004";
 
 -- Manually loadable ROMs, in the order of the menu's OPTM_G_LOAD_ROM lines: FDD0, FDD1, SASI,
--- SxSI 1, SxSI 2, SRAM. The firmware's PREP_LOAD_IMAGE hands the file to x68_sd.vhd (extent map)
+-- SxSI 1, SxSI 2, SxSI 3, SxSI 4, SRAM. The firmware's PREP_LOAD_IMAGE hands the file to x68_sd.vhd (extent map)
 -- and leaves the file pointer at the end, so the Shell streams nothing and only does the CSR
 -- handshake.
-constant C_CRTROMS_MAN_NUM       : natural := 6;
+constant C_CRTROMS_MAN_NUM       : natural := 8;
 constant C_CRTROMS_MAN           : crtrom_buf_array := ( C_CRTROMTYPE_DEVICE, C_DEV_X68_FDD0,
                                                          C_CRTROMTYPE_DEVICE, C_DEV_X68_FDD1,
                                                          C_CRTROMTYPE_DEVICE, C_DEV_X68_SASI,
                                                          C_CRTROMTYPE_DEVICE, C_DEV_X68_SXSI1,
                                                          C_CRTROMTYPE_DEVICE, C_DEV_X68_SXSI2,
+                                                         C_CRTROMTYPE_DEVICE, C_DEV_X68_SXSI3,
+                                                         C_CRTROMTYPE_DEVICE, C_DEV_X68_SXSI4,
                                                          C_CRTROMTYPE_DEVICE, C_DEV_X68_SRAM,
                                                          x"EEEE");
 

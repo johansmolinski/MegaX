@@ -12,7 +12,7 @@
 ; arrived, ends the load and waits until the X68000 has taken the last byte;
 ; the core then lets its 68000 run.
 ;
-; The disk images: the menu's image lines (FDD0, FDD1, SASI, SxSI 1/2, SRAM)
+; The disk images: the menu's image lines (FDD0, FDD1, SASI, SxSI 1-4, SRAM)
 ; hand the chosen file to x68_sd.vhd (PREP_LOAD_IMAGE, FD_SETUP), which serves
 ; its sectors to the core straight from the SD card.
 ;
@@ -175,7 +175,8 @@ _GS_NO          AND     0xFFFB, SR
 
 ; menu group, x68_sd slot (hps_io's: 0/1 floppies, 2 SASI, 3 SRAM, 4.. SxSI)
 GROUP_SLOTS     .DW     X68_OPTM_G_FDD0, 0, X68_OPTM_G_FDD1, 1, X68_OPTM_G_SASI, 2
-                .DW     X68_OPTM_G_SXSI1, 4, X68_OPTM_G_SXSI2, 5, X68_OPTM_G_SRAMF, 3
+                .DW     X68_OPTM_G_SXSI1, 4, X68_OPTM_G_SXSI2, 5, X68_OPTM_G_SXSI3, 6
+                .DW     X68_OPTM_G_SXSI4, 7, X68_OPTM_G_SRAMF, 3
                 .DW     0
 ; menu line, x68_sd slot, menu group (SPACE eject)
 LINE_SLOTS      .DW     X68_OSM_FDD0_LN, 0, X68_OPTM_G_FDD0
@@ -183,6 +184,8 @@ LINE_SLOTS      .DW     X68_OSM_FDD0_LN, 0, X68_OPTM_G_FDD0
                 .DW     X68_OSM_SASI_LN, 2, X68_OPTM_G_SASI
                 .DW     X68_OSM_SXSI1_LN, 4, X68_OPTM_G_SXSI1
                 .DW     X68_OSM_SXSI2_LN, 5, X68_OPTM_G_SXSI2
+                .DW     X68_OSM_SXSI3_LN, 6, X68_OPTM_G_SXSI3
+                .DW     X68_OSM_SXSI4_LN, 7, X68_OPTM_G_SXSI4
                 .DW     X68_OSM_SRAM_LN, 3, X68_OPTM_G_SRAMF
                 .DW     0xFFFF
 
@@ -241,7 +244,7 @@ FD_SEL          INCRB
                 RET
 
 FD_DEV_TAB      .DW     X68_DEV_FDD0, X68_DEV_FDD1, X68_DEV_SASI, X68_DEV_SRAM
-                .DW     X68_DEV_SXSI1, X68_DEV_SXSI2
+                .DW     X68_DEV_SXSI1, X68_DEV_SXSI2, X68_DEV_SXSI3, X68_DEV_SXSI4
 FD_REGWIN       .EQU    0x0000
 FD_MAPWIN       .EQU    0x0001
 FD_MODE         .EQU    0x8000                  ; bit 0 on, bit 1 the card in slot 1,
@@ -632,9 +635,10 @@ CFG_SIGSET      SYSCALL(enter, 1)
 ; menu lines. "1": 15 lines (HDMI submenu, 68000 at 20 MHz, help, reset).
 ; "2": 18 lines, FDD0 and FDD1 at lines 2-3. "3": 33 lines, the images FDD0,
 ; FDD1, SASI, SxSI 1, SxSI 2, SRAM at lines 2-7, the "Disks and SRAM" submenu.
+; "4": 35 lines, SxSI 3 and SxSI 4 after SxSI 2 (the images at lines 2-9).
 ; At most 3 characters (CFG_SIGCHECK's buffer).
 CFG_SIG_KEY     .ASCII_W "menu"
-CFG_SIG_VAL     .ASCII_W "3"
+CFG_SIG_VAL     .ASCII_W "4"
 
 ; ----------------------------------------------------------------------------
 ; The FAT32 write layer (the Shell creates and resizes the settings file with
