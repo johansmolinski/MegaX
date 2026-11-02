@@ -33,6 +33,12 @@ set_multicycle_path 2 -setup -start -from [get_clocks clk_ram] -to [get_clocks m
 set_multicycle_path 1 -hold  -start -from [get_clocks clk_ram] -to [get_clocks main_clk]
 set_multicycle_path 2 -setup -end   -from [get_clocks main_clk] -to [get_clocks clk_ram]
 set_multicycle_path 1 -hold  -end   -from [get_clocks main_clk] -to [get_clocks clk_ram]
+## Except where clk_ram samples on every clock (no enable on the common edges): vidcont's fast
+## clear requests (vcreg registers FCbgn/FCend on main_clk since 2026-11-02; with the
+## multicycle the decode took 18.6 ns and the clk_ram edge in between saw a phantom FCend).
+set GCLR [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_main/i_x68_system/i_core/vc/gclrbgnrq_reg* || NAME =~ CORE/i_main/i_x68_system/i_core/vc/gclrendrq_reg*)}]
+set_multicycle_path 1 -setup -end -from [get_clocks main_clk] -to $GCLR
+set_multicycle_path 0 -hold  -end -from [get_clocks main_clk] -to $GCLR
 
 ## X68000.sdc: the 68000 (fx68k: phi1/phi2 enables at most every second clk_sys clock) and the
 ## DMA controller (DMA63450) work on enables: two clocks for paths from and to them. Counted in
