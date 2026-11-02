@@ -305,3 +305,18 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   SRAM `$80E` check); the scaler shows its unwritten buffers' power-up noise for ~2 s until
   the X68000's scanout starts.
 
+
+## 2026-11-02 - Phase 4: the exact video oscillators
+
+- `clk.vhd`: the four oscillators of `x68k_video_clock.sv`, one MMCM each (internal
+  feedback, all running all the time): family 0 69.552239 MHz (31 kHz), 1 38.863636 MHz
+  (15 kHz), 2 50.349650 MHz (HMODE 3, VGA 640), 3 75.249113 MHz ("60 Hz" 31 kHz), within
+  7.6 ppm. `clk_scan` (the scanout clock and M2M's video clock) is the family the core asks
+  for, through a tree of three BUFGMUX_CTRL. `main.vhd`: every mode now gets `scan_ready`;
+  the handshake holds the scanout in reset while the selection changes, as the MiSTer core
+  does while its PLL relocks.
+- `tb/sim/bootdisk/modetest.S`: a boot sector that steps through IOCS _CRTMOD 16, 1, 3, 0,
+  2, 19, 17, 18 (~5 s each; mode number, format and colour bars in the text planes).
+- **`megax-v`: OK, WNS +0.107 ns, WHS +0.034 ns; 54.4k LUTs, 327.5 / 365 block RAM tiles.
+  Hardware: all eight modetest modes work (15, 24 and 31 kHz, 640x480, 1024x848
+  interlaced).** Family 3 (75.249 MHz) is not exercised by modetest.

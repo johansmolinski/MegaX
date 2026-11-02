@@ -122,7 +122,7 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
 3. **Disks.** XDF/DIM/HDM floppies through the SD sector service, then D88,
    SRAM persistence, SASI/SxSI hard disks. Goal: Human68k boots from floppy
    and from a hard disk image.
-4. **Exact video clocks** and the 15/24/31 kHz modes through ascal and the
+4. **Exact video clocks** (done 2026-11-02, `megax-v`) and the 15/24/31 kHz modes through ascal and the
    analog output.
 5. **Input and extras:** mouse, joystick types, turbo, OPM choice, MIDI on
    PMOD, menu polish, release packaging.
