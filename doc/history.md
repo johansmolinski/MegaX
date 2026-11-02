@@ -395,3 +395,14 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
     waitrequest path (QNICE FIFO - arbiter - controller - arbiter - ascal).
   - `megax-zj` (`628a660`): the same recovery registered (the read taken in WRITE_BURST_ST is
     started from RECOVERY_ST), the cut and watchdog counters counting since the load.
+  - **`megax-zj`: OK, WNS +0.140 ns. 20+ resets and games without a black screen; since the
+    load the controller cut 6 write bursts (each would have been a black HDMI before) and the
+    ascal watchdog fired 15 times.**
+- **Fast clear hang, second cause** (`megax-zj`, the SxSI system disk, black screen with a
+  cursor on both outputs, the 68000 in `BTST #1,$E80481` at `$0462F4`): reproduced on the
+  first try with the trace armed at `$0462F4`. The boot scrolls text by raster copies (read
+  `$08`, write `$08` to R21 `$E80481`), ends them with `$00` and 80 bus cycles later writes
+  `$02` (fast clear). Every R21 write with bit 1 = 0 left vidcont's `gclrendrq` set until the
+  next hcomp, which then cancelled the fast clear requested later in the same line. Fork
+  `1ac77b5`: a request clears a stale stop, a stop is taken only when a clear is pending or
+  running (provenance comment). Build `megax-zk`.
