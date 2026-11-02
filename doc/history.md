@@ -406,3 +406,22 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   next hcomp, which then cancelled the fast clear requested later in the same line. Fork
   `1ac77b5`: a request clears a stale stop, a stop is taken only when a clear is pending or
   running (provenance comment). Build `megax-zk`.
+
+## 2026-11-02 - Mouse and joysticks
+
+- `mouse.vhd`: an Amiga quadrature mouse in DB9 port 1 as the PS/2 mouse that the core's
+  MOUSECONV (SCC) expects: PC10-III's quadrature decoder (`cbm_mouse.sv`), the PS/2 device line
+  of `keyboard.vhd`, answers FF (FA AA 00), F2, F4/F5/F6, 3-byte packets at most every 10 ms.
+  `tb/shell/run_mouse.sh`: tb_mouse PASS against MOUSECONV (start-up FF/F6/F4, both axes and
+  signs, the left button). MOUSECONV's counters have no reset (`mouseconv_sim.py` gives them
+  the FPGA's 0 in simulation).
+- Joysticks: MiSTer's default 2-button mode (pJoyA/pJoyB: up, down, left, right, A = fire,
+  B = pin 9). Menu "Mouse in port 1" (default on: port 2 = X68000 joystick 1; off: ports 1/2 =
+  joysticks 1/2), menu signature 5. The second buttons (mouse right, joystick B) are on the
+  POT line of pin 9: Megamiga's presence latch, so only active adapters (MouSTer) give them;
+  a passive switch to GND is invisible (the POT lines reach the FPGA only through the paddle
+  comparators). A keyboard fallback or a pull-up adapter: not for 0.1 (the user).
+- `megax-zl` (incremental from megax-zk): timing met, but write_bitstream failed ("Site type
+  pointers for element PAD and routed site do not match", 8 IOBs: pins unused in the
+  reference); `megax-zl2` (not incremental): OK, WNS +0.078 ns. **Hardware: the mouse works.**
+  Joystick not yet tested (the SMS pad is missing).
