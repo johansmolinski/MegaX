@@ -159,6 +159,8 @@ entity av_pipeline is
       hr_readdata_i           : in  std_logic_vector(15 downto 0);
       hr_readdatavalid_i      : in  std_logic;
       hr_waitrequest_i        : in  std_logic;
+      -- M2M-UPSTREAM hr-debug (MegaX 2026-11-02, temporary): ascal's o_dbg
+      ascal_dbg_o             : out unsigned(15 downto 0);
       hr_high_o               : out std_logic; -- Core is too fast
       hr_low_o                : out std_logic; -- Core is too slow
 
@@ -858,6 +860,7 @@ begin
          video_hdmax_o            => video_hdmax,
          video_vdmax_o            => video_vdmax,
          video_interlaced_o       => video_interlaced,   -- M2M-UPSTREAM screen-center
+         ascal_dbg_o              => ascal_dbg_o,        -- M2M-UPSTREAM hr-debug
          audio_clk_i              => audio_clk_i,
          audio_rst_i              => audio_rst_i,
          audio_left_i             => signed(audio_left),

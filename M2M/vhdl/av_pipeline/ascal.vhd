@@ -206,6 +206,10 @@ ENTITY ascal IS
     -- i_inter (armed on an i_fl edge, disarmed 3 vsyncs after toggling stops);
     -- same i_clk input domain as i_hdmax/i_vdmax.
     i_interlaced : OUT std_logic;
+
+    -- M2M-UPSTREAM hr-debug (MegaX 2026-11-02, temporary): the output read
+    -- pipeline's state and the read watchdog's counter, see Scalaire.
+    o_dbg : OUT unsigned(15 DOWNTO 0);
     
     -- Output video parameters
     run    : IN std_logic :='1'; -- 1=Enable output image. 0=No image
@@ -490,6 +494,9 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL o_readlev,o_copylev : natural RANGE 0 TO 2;
   SIGNAL o_hburst,o_hbcpt : natural RANGE 0 TO 31;
   SIGNAL o_fload : natural RANGE 0 TO 3;
+  -- M2M-UPSTREAM hr-debug: the read watchdog (Scalaire)
+  SIGNAL o_wd_prog : std_logic;
+  SIGNAL o_wd_cnt : unsigned(3 DOWNTO 0);
   SIGNAL o_acpt,o_acpt1,o_acpt2,o_acpt3,o_acpt4 : natural RANGE 0 TO 15; -- Alternance pixels FIFO
   SIGNAL o_dshi : natural RANGE 0 TO 3;
   SIGNAL o_first,o_last,o_last1,o_last2 : std_logic;
@@ -1130,6 +1137,16 @@ BEGIN
   -- state onto the output port (combinational; the consumer synchronises it).
   i_interlaced <= i_inter;
   o_reset_na<='0'   WHEN reset_na='0' ELSE '1' WHEN rising_edge(o_clk);
+
+  -- M2M-UPSTREAM hr-debug: 15-12 watchdog count, 11-10 avl_state, 9-8 fload,
+  -- 7-6 copylev, 5-4 readlev, 3-2 o_copy, 1-0 o_state (read asynchronously)
+  o_dbg <= o_wd_cnt &
+           to_unsigned(type_avl_state'POS(avl_state),2) &
+           to_unsigned(o_fload MOD 4,2) &
+           to_unsigned(o_copylev,2) &
+           to_unsigned(o_readlev,2) &
+           to_unsigned(enum_o_copy'POS(o_copy),2) &
+           to_unsigned(enum_o_state'POS(o_state),2);
   avl_reset_na<='0' WHEN reset_na='0' ELSE '1' WHEN rising_edge(avl_clk);
   
   -----------------------------------------------------------------------------
@@ -1884,6 +1901,8 @@ BEGIN
       o_copylev<=0;
       o_hsp<='0';
       o_hspn<=0;
+      o_wd_prog<='0'; -- M2M-UPSTREAM hr-debug
+      o_wd_cnt<=x"0";
       o_readack_sync<='0';
       o_readack_sync2<='0';
       o_readack<='0';
@@ -2013,6 +2032,30 @@ BEGIN
         o_vmode(2 DOWNTO 0)<="000";
       END IF;
       
+      ------------------------------------------------------
+      -- M2M-UPSTREAM hr-debug (MegaX 2026-11-02): read watchdog. After some
+      -- start-ups the output side never read again (HDMI black, OSD fine,
+      -- input writes going on): READLEV/COPYLEV can lock when the
+      -- readdataack toggles get out of step with the reads (avl_wad is only
+      -- realigned at VS). A whole output frame without a readack, a
+      -- readdataack or an idle moment is no normal state: the read pipeline
+      -- restarts at the VS (avl_wad is realigned at the same edge).
+      IF o_readack='1' OR o_readdataack='1' OR
+         (o_readlev=0 AND o_copy=sWAIT AND o_state/=sWAITREAD) THEN
+        o_wd_prog<='1';
+      END IF;
+      IF o_vsv(1)='1' AND o_vsv(0)='0' THEN
+        o_wd_prog<='0';
+        IF o_wd_prog='0' THEN
+          o_state  <=sDISP;
+          o_copy   <=sWAIT;
+          o_readlev<=0;
+          o_copylev<=0;
+          o_fload  <=0;
+          o_wd_cnt <=o_wd_cnt+1;
+        END IF;
+      END IF;
+
       ------------------------------------------------------
       -- End DRAM READ
       o_readack_sync<=avl_readack; -- <ASYNC>

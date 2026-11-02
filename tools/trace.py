@@ -12,7 +12,8 @@ frozen for the read-out and unfrozen afterwards (--keep: stays frozen). --writes
 --arm: the trigger on a program fetch at <addr> (hex, mask default FFFFFF); the trace then
 freezes itself 64 cycles after it; --reset resets the X68000 afterwards (M2M CSR bit 0, about
 a millisecond), so the trigger catches the next boot. --status: control, fired, counters, and
-the OPM bus wait probe (X68K_top's dbg_opm) decoded, with the opm_ce(0) pulse counter read twice.
+the OPM bus wait probe (X68K_top's dbg_opm) decoded, with the opm_ce(0) pulse counter read twice;
+the HyperRAM probe and ascal's read pipeline with its watchdog counter (M2M-UPSTREAM hr-debug).
 """
 import os, re, subprocess, sys
 
@@ -71,7 +72,12 @@ if status:
         for k, (name, a, b) in enumerate([("commands accepted", 13, 13), ("read words", 14, 14)]):
             print("%s: %d, then %d (%s)" % (name, dumps[0][a], dumps[1][a],
                   "moving" if dumps[0][a] != dumps[1][a] else "STOPPED"))
-        print("burst count %d, QNICE commands accepted %d" % (dumps[1][15] & 0xFF, dumps[1][15] >> 8))
+        # ascal's output read pipeline (M2M-UPSTREAM hr-debug, word 15) and its read watchdog
+        a = dumps[1][15]
+        print("ascal: o_state=%s o_copy=%s readlev=%d copylev=%d fload=%d avl_state=%s watchdog=%d (then %d)" % (
+              ["DISP", "HSYNC", "READ", "WAITREAD"][a & 3], ["WAIT", "SHIFT", "COPY", "?"][a >> 2 & 3],
+              a >> 4 & 3, a >> 6 & 3, a >> 8 & 3, ["IDLE", "WRITE", "READ", "?"][a >> 10 & 3],
+              dumps[0][15] >> 12, a >> 12))
     sys.exit(0)
 if arm:
     a, _, m = arm.partition("/")

@@ -42,4 +42,10 @@ Rules:
   accepted commands, delivered read words and QNICE's accepted commands, the burst count; shown
   by `x68_trace.vhd` (registers 0x0C-0x0F, `tools/trace.py --status`). Why: about every other
   reset HDMI stays black and every HyperRAM access hangs (QNICE's too); to see who waits for
-  whom. To be removed with the fix.
+  whom. To be removed with the fix. Megax-zf showed the controller healthy: the scaler kept
+  writing 64-word bursts but never read again (256 read words since the load), on the first
+  load too. Since megax-zg also `vhdl/av_pipeline/ascal.vhd` (port `o_dbg`, a read watchdog
+  in Scalaire: a whole output frame without a readack, a readdataack or an idle read pipeline
+  restarts the pipeline at the VS), `digital_pipeline.vhd` and `av_pipeline.vhd` (`ascal_dbg_o`);
+  bits 63..48 of the word are now ascal's state and the watchdog counter. The watchdog may stay
+  as the fix (then as its own tag) if it proves to be one.

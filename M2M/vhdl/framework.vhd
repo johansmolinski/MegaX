@@ -321,6 +321,7 @@ signal hr_rst                 : std_logic;
 signal hr_dbg_cmd             : unsigned(15 downto 0) := (others => '0');  -- M2M-UPSTREAM hr-debug
 signal hr_dbg_rdv             : unsigned(15 downto 0) := (others => '0');
 signal hr_dbg_qn              : unsigned(7 downto 0)  := (others => '0');
+signal ascal_dbg              : unsigned(15 downto 0);  -- M2M-UPSTREAM hr-debug
 signal audio_rst              : std_logic;
 signal hdmi_rst               : std_logic;
 
@@ -768,7 +769,9 @@ begin
          if (hr_qnice_write = '1' or hr_qnice_read = '1') and hr_qnice_waitrequest = '0' then
             hr_dbg_qn <= hr_dbg_qn + 1;
          end if;
-         hr_dbg_o <= std_logic_vector(hr_dbg_qn) & hr_burstcount(7 downto 0) &
+         -- M2M-UPSTREAM hr-debug: 63..48 now ascal's read pipeline state
+         -- (was the QNICE command counter and the burst count)
+         hr_dbg_o <= std_logic_vector(ascal_dbg) &
                      std_logic_vector(hr_dbg_rdv) & std_logic_vector(hr_dbg_cmd) &
                      "000" & hr_rst &
                      hr_qnice_readdatavalid & hr_qnice_waitrequest & hr_qnice_read & hr_qnice_write &
@@ -1070,6 +1073,7 @@ begin
          hr_readdata_i           => hr_dig_readdata,
          hr_readdatavalid_i      => hr_dig_readdatavalid,
          hr_waitrequest_i        => hr_dig_waitrequest,
+         ascal_dbg_o             => ascal_dbg,              -- M2M-UPSTREAM hr-debug
          hr_high_o               => hr_high_o,
          hr_low_o                => hr_low_o,
          -- Output to MEGA65 board
