@@ -16,12 +16,13 @@ Tested on the hardware:
 
 * Human68k 3.02 boots from a DIM floppy image and from a SASI hard disk
   image on the SD card; the main RAM passes a memory test.
+* The keyboard in MiSTer's layout (the core's help page lists the keys):
+  typing at Human68k's prompt.
 * HDMI and VGA output; the X68000's four video oscillators: the 15, 24 and
   31 kHz modes, 640x480 and 1024x848 interlaced all show.
 
 Built, so far tested only in simulation or not yet at all:
 
-* The keyboard in MiSTer's layout (the core's help page lists the keys).
 * D88 floppies with write-back, SxSI (.HDS) hard disk images, the SRAM
   image; the mounted images are remembered across power-off.
 
