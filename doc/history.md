@@ -332,3 +332,28 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   `doc/inventory.md` and README updated. The GitHub issue MiSTer-devel/X68000_MiSTer#74
   (no answer since 2026-10-26) got a comment pointing to the blog reply.
 - Still without licence text: IKAOPM, `xe1ap.v`, `mister_sync.sv`.
+
+## 2026-11-02 - Human68k boots: the OPM bus wait
+
+- First tries with Human68k 3.02 (`files/`, not in the repository): the DIM floppy and a 40 MB
+  SASI image both gave a black screen. The bus trace (`megax-v`): the 68000 stopped for good on
+  `TST.B $E90003` (the YM2151 status) in the IPL's OPM write routine at `$FF9C9C`, the first OPM
+  access; on the floppy HUMAN.SYS was already loaded and running (fetches `$00AA00-$00CF00`).
+  Our test boot sectors never touched the OPM.
+- Simulation `h68-a` (same DIM, 6 s): no hang there (the OPM accesses complete).
+- `megax-w`: probe `dbg_opm` (fork `X68K_top` port, `x68_trace.vhd` register 9 and an
+  opm_ce(0) pulse counter in 10/11, `tools/trace.py --status` decodes it). On the board:
+  `opm_csn=0`, `b_rdn=0`, all resets inactive, opm_ce(0) running, `iowait_opm=1`, but
+  `opm_wstate` stuck at 0. In the routed design the clock enable of the (one-hot) FSM took the
+  clock net `sysclk` through a LUT4: Vivado built upstream's
+  `elsif(sndclk' event and sndclk='1' and opm_ce(0) = '1')` into CE = sndclk and ..., which is
+  never seen at the rising edge. Quartus and ghdl read it as an edge with an enable.
+- Fork `4bd3cb5`: that process as `rising_edge(sndclk)` with the enable inside (provenance
+  comment, the original line kept). The two other processes of that form in `X68K_top`
+  (palette entry 0, the PS/2 input sampling) have no clock path in their enables (checked in
+  the routed design) and stay as they are.
+- **`megax-x`: OK, WNS +0.081 ns, WHS +0.034 ns. Hardware: Human68k boots from the DIM floppy
+  and from the SASI hard disk image.**
+- Open: in simulation the DIM's boot sector stops after reading the FAT and root directory
+  (`h68-b`: an IOCS call that looks like an error exit at 1.878 s), while the board loads
+  HUMAN.SYS from the same image: probably the testbench's DIM handling, not looked into.

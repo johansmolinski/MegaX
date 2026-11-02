@@ -14,20 +14,17 @@ Status (2026-11-02)
 
 Tested on the hardware:
 
-* Sharp's IPL boots a floppy image from the SD card; the main RAM passes a
-  memory test.
+* Human68k 3.02 boots from a DIM floppy image and from a SASI hard disk
+  image on the SD card; the main RAM passes a memory test.
 * HDMI and VGA output; the X68000's four video oscillators: the 15, 24 and
   31 kHz modes, 640x480 and 1024x848 interlaced all show.
 
 Built, so far tested only in simulation or not yet at all:
 
 * The keyboard in MiSTer's layout (the core's help page lists the keys).
-* D88 floppies with write-back, SASI (.HDF) and SxSI (.HDS) hard disk
-  images, the SRAM image; the mounted images are remembered across
-  power-off.
+* D88 floppies with write-back, SxSI (.HDS) hard disk images, the SRAM
+  image; the mounted images are remembered across power-off.
 
-The hardware tests used small test boot sectors of our own; Human68k has not
-been tried yet.
 
 Not done yet: mouse, joysticks, turbo, the OPM choice, MIDI, menu polish and
 release packaging. Known issues: some first loads end in the ROM debugger
