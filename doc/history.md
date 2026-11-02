@@ -425,3 +425,20 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   pointers for element PAD and routed site do not match", 8 IOBs: pins unused in the
   reference); `megax-zl2` (not incremental): OK, WNS +0.078 ns. **Hardware: the mouse works.**
   Joystick not yet tested (the SMS pad is missing).
+
+## 2026-11-02 - Faster mounts, second try
+
+- Split into **part A**, the firmware's seek to the end through the extent map
+  (`FAT32$FILE_SEEK_MAP` of main's QNICE `78aeaac`, `9b7685e`) instead of a second walk of the
+  chain by `f32_fseek`, and **part B**, the map builder's fast path (QNICE `megax-fastmap`,
+  `749d32d`: `_F32_FM_RUN` follows the entries of the FAT sector in the buffer while each one
+  is "current + 1").
+- Part B in the QNICE emulator with a file of the size of the user's HDS (1981808640 bytes,
+  4 KB clusters = 483840 clusters, one extent; `fat32_seek` with `SPCS=8 BIG_BYTES=...`,
+  QNICE `6c0665f`): PASS (map, seeks with and without it, the 65536-cluster crossings).
+- **`megax-zm` (part A alone; WNS +0.078 ns): the 2 GB HDS mounts from the menu in about 8 s,
+  half the time before.** So part A was not what broke `megax-ze`. The 8 s left are the map
+  builder's walk of the chain (3780 FAT sectors, every entry through READ_DW/READ_W/READ_B/
+  CALL_DEV), which part B is meant to cut.
+- `megax-zn` = `megax-zm` + part B (QNICE `6c0665f`), to try part B alone on the hardware.
+  Shell ROM 27928/32768 words.
