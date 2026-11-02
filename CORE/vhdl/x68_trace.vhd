@@ -14,6 +14,9 @@
 --             0x04/0x05  (R/W) trigger address bits 15..0, 23..16
 --             0x06/0x07  (R/W) trigger mask (1 = compare this bit) bits 15..0, 23..16
 --             0x08 (R)   bit 0: the trigger has fired (the trace froze itself)
+--             0x09 (R)   X68K_top's dbg_opm now (the OPM bus wait: opm_wstate, the iowait
+--                        sources, the resets, opm_csn, the strobes, opm_ce(0), AS)
+--             0x0A/0x0B  (R) opm_ce(0) pulses since the power-up (lo, hi; 4 MHz)
 --   Trigger: while armed, a program fetch (FC 2 or 6) whose address matches under the mask
 --   fires; 64 more cycles are recorded, then the trace freezes (control bit 0 stays as it was:
 --   write the control again to re-arm). So the ring holds the ~960 cycles before the match.
@@ -33,6 +36,7 @@ entity x68_trace is
    port (
       clk_sys_i      : in  std_logic;
       bus_i          : in  std_logic_vector(47 downto 0);   -- X68K_top's dbg_bus
+      opm_i          : in  std_logic_vector(15 downto 0);   -- X68K_top's dbg_opm
 
       qnice_clk_i    : in  std_logic;
       qnice_addr_i   : in  std_logic_vector(27 downto 0);
@@ -64,6 +68,13 @@ architecture synthesis of x68_trace is
    signal we         : std_logic := '0';
    signal wdata      : std_logic_vector(47 downto 0) := (others => '0');
    signal waddr      : std_logic_vector(9 downto 0) := (others => '0');
+
+   signal opm        : std_logic_vector(15 downto 0) := (others => '0');
+   signal opm_ces    : unsigned(31 downto 0) := (others => '0');
+   signal q_opm_1    : std_logic_vector(15 downto 0) := (others => '0');
+   signal q_opm      : std_logic_vector(15 downto 0) := (others => '0');
+   attribute ASYNC_REG of q_opm_1 : signal is "TRUE";
+   attribute ASYNC_REG of q_opm   : signal is "TRUE";
 
    signal q_win      : std_logic_vector(15 downto 0);
    signal q_rdata    : std_logic_vector(47 downto 0);
@@ -110,6 +121,26 @@ begin
          end if;
       end if;
    end process p_rec;
+
+   -- the OPM bus wait probe: registered here, synchronised bit by bit into the QNICE clock
+   -- (each bit on its own; while the bus hangs they are static); opm_ce(0) pulses counted
+   p_opm : process (clk_sys_i)
+   begin
+      if rising_edge(clk_sys_i) then
+         opm <= opm_i;
+         if opm(12) = '1' then
+            opm_ces <= opm_ces + 1;
+         end if;
+      end if;
+   end process p_opm;
+
+   p_qopm : process (qnice_clk_i)
+   begin
+      if rising_edge(qnice_clk_i) then
+         q_opm_1 <= opm;
+         q_opm   <= q_opm_1;
+      end if;
+   end process p_qopm;
 
    i_ram : entity work.dualport_2clk_ram
       generic map (
@@ -166,6 +197,9 @@ begin
                when x"006" => qnice_data_o <= q_tmask(15 downto 0);
                when x"007" => qnice_data_o <= x"00" & q_tmask(23 downto 16);
                when x"008" => qnice_data_o <= "000000000000000" & s_fired;
+               when x"009" => qnice_data_o <= q_opm;
+               when x"00A" => qnice_data_o <= std_logic_vector(opm_ces(15 downto 0));
+               when x"00B" => qnice_data_o <= std_logic_vector(opm_ces(31 downto 16));
                when others => null;
             end case;
          when x"0001" => qnice_data_o <= q_rdata(15 downto 0);

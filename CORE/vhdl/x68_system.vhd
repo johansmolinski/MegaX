@@ -111,6 +111,7 @@ port (
    dbg_status     : out   std_logic_vector(4 downto 0);    -- bring-up: started, ldr_done,
                                                            -- core_rstn, reset, locked
    dbg_bus        : out   std_logic_vector(47 downto 0);   -- the 68000's bus (x68_trace.vhd)
+   dbg_opm        : out   std_logic_vector(15 downto 0);   -- the OPM bus wait (x68_trace.vhd)
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -441,7 +442,8 @@ begin
       disk_mode        => disk_mode,
       sxsi_inject      => sxsi_inject,
       vis_mem          => "0000",
-      dbg_bus          => dbg_bus
+      dbg_bus          => dbg_bus,
+      dbg_opm          => dbg_opm
    );
 
    -- X68000.sv swaps the channels on purpose (pSndL => aud_r).

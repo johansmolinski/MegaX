@@ -367,6 +367,7 @@ signal main_boot_ended_d      : std_logic := '0';
 signal main_dbg_status        : std_logic_vector(5 downto 0);
 signal main_dbg_scan          : std_logic_vector(7 downto 0);
 signal main_dbg_bus           : std_logic_vector(47 downto 0);
+signal main_dbg_opm           : std_logic_vector(15 downto 0);
 signal qnice_dbg_data         : std_logic_vector(15 downto 0);
 signal qnice_dbg_ce           : std_logic;
 signal qnice_dbg_we           : std_logic;
@@ -614,6 +615,7 @@ begin
          dbg_status_o         => main_dbg_status,
          dbg_scan_o           => main_dbg_scan,
          dbg_bus_o            => main_dbg_bus,
+         dbg_opm_o            => main_dbg_opm,
 
          img_mounted_i        => main_img_mounted,
          img_readonly_i       => main_img_readonly,
@@ -735,6 +737,7 @@ begin
       port map (
          clk_sys_i            => main_clk,
          bus_i                => main_dbg_bus,
+         opm_i                => main_dbg_opm,
          qnice_clk_i          => qnice_clk_i,
          qnice_addr_i         => qnice_dev_addr_i,
          qnice_data_i         => qnice_dev_data_i,

@@ -11,7 +11,8 @@ frozen for the read-out and unfrozen afterwards (--keep: stays frozen). --writes
 "writes only" (and unfreeze), so that a later read shows the last 1024 write cycles.
 --arm: the trigger on a program fetch at <addr> (hex, mask default FFFFFF); the trace then
 freezes itself 64 cycles after it; --reset resets the X68000 afterwards (M2M CSR bit 0, about
-a millisecond), so the trigger catches the next boot. --status: control, fired, counters.
+a millisecond), so the trigger catches the next boot. --status: control, fired, counters, and
+the OPM bus wait probe (X68K_top's dbg_opm) decoded, with the opm_ce(0) pulse counter read twice.
 """
 import os, re, subprocess, sys
 
@@ -42,7 +43,24 @@ if writes:
     print(qmon(["MCFFF40110", "MCFFF50000", "MC80000002"], qargs))
     sys.exit(0)
 if status:
-    print(qmon(["MCFFF40110", "MCFFF50000", "MD80008008"], qargs))
+    out = qmon(["MCFFF40110", "MCFFF50000", "MD8000800B", "MD8000800B"], qargs)
+    print(out)
+    # the OPM bus wait probe (register 9, X68K_top's dbg_opm) and the opm_ce(0) pulse counter
+    # (registers 10/11), from both dumps: the counter must move between them (4 MHz)
+    dumps = []
+    for b in re.split(r"MEMORY/DUMP", out)[1:]:
+        w = []
+        for m in re.finditer(r"^([0-9A-F]{4}): ((?:[0-9A-F]{4} ?)+)", b, re.M):
+            w += [int(x, 16) for x in m.group(2).split()]
+        dumps.append(w)
+    if len(dumps) == 2 and all(len(w) >= 12 for w in dumps):
+        o = dumps[1][9]
+        names = ["iowait_opm", "iowait_sasi", "iowait_rcpy", "iowait", "srstn", "mpu_reset_n",
+                 "cpu_rstn", "opm_csn", "b_rdn", "b_wrn0", "opm_ce0", "ASn"]
+        print("dbg_opm %04X: opm_wstate=%d " % (o, o & 3) +
+              " ".join("%s=%d" % (n, o >> (i + 2) & 1) for i, n in enumerate(names)))
+        c0, c1 = (w[10] | w[11] << 16 for w in dumps)
+        print("opm_ce(0) pulses: %d, then %d (%s)" % (c0, c1, "running" if c1 != c0 else "STOPPED"))
     sys.exit(0)
 if arm:
     a, _, m = arm.partition("/")
