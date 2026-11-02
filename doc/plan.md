@@ -129,12 +129,18 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
 
 ## 4. Decisions and open questions
 
-1. **Licence** (the user, 2026-10-26): no licence file in this repository
-   for now; a ticket upstream asks for one. Puu-san's RTL has no licence file
-   or headers; the only statement is `Doc/readme.txt` ("this RTL is free
-   software", copyright kept by Puu, no warranty). IKAOPM, `xe1ap.v` and
-   `mister_sync.sv` carry no licence text; fx68k and jt51 are GPL-3+, the top
-   GPL-2+. Revisit when the upstream ticket is answered.
+1. **Licence: GPLv3** (the user, 2026-11-02; `LICENSE`). Puu-san's RTL has
+   no licence file or headers; the only statement was `Doc/readme.txt` ("this
+   RTL is free software", copyright kept by Puu, no warranty). The user asked
+   on Puu-san's blog (2026-10-27) for permission to modify and redistribute it
+   under GPL version 3 or later; Puu-san answered on 2026-10-29
+   (https://fpga8801.seesaa.net/article/519747422.html):
+   「GPLv3の条件で再配布いただいて問題ありません。」("Redistributing it under
+   the terms of GPLv3 is no problem.") "Or later" was not confirmed, so the
+   combination is GPLv3. fx68k and jt51 are GPL-3+, the top GPL-2+, M2M
+   GPL-3. Still without licence text: IKAOPM, `xe1ap.v`, `mister_sync.sv`.
+   The GitHub issue MiSTer-devel/X68000_MiSTer#74 (2026-10-26) got no answer;
+   the blog reply was posted there on 2026-11-02.
 2. **TVRAM in block RAM** if it fits (the user, 2026-10-26); otherwise the
    SDRAM fallback of section 2.2.
 3. **Name and SD card folder** (the user, 2026-10-26): the core is **MegaX**;

@@ -8,6 +8,15 @@ MiSTer2MEGA65 framework as modified by
 
 **Work in progress - nothing runs yet.** See `doc/plan.md`.
 
+Licence
+-------
+
+GNU General Public License version 3 (`LICENSE`). Puu-san allowed the
+redistribution of the X68000 RTL under GPLv3 on 2026-10-29
+([blog reply](https://fpga8801.seesaa.net/article/519747422.html)); fx68k
+and jt51 are GPL-3+, MiSTer2MEGA65 is GPL-3. The Sharp ROMs (IPL, CGROM) are
+not part of MegaX: the core loads `boot.rom` from the SD card.
+
 Credits
 -------
 

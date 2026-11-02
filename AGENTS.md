@@ -49,9 +49,10 @@ names).
    card at start-up. (Upstream's `releases/` folder carries a `boot.rom`; it
    stays in the submodule's history and is never copied into this
    repository or used to initialise a RAM.)
-5. **No licence file** in this repository (the user, 2026-10-26): Puu-san's
-   RTL has no licence; a ticket upstream asks for one. Do not add a LICENSE
-   or licence headers to our files until the user says so.
+5. **Licence: GPLv3** (`LICENSE`, the user, 2026-11-02). Puu-san allowed
+   redistribution of the X68000 RTL under GPLv3 on 2026-10-29 (blog reply,
+   `doc/plan.md` section 4.1); "or later" was asked but not confirmed. No
+   licence headers in our files unless the user asks for them.
 6. **Board: MEGA65 R6 only** for now (one `CORE/CORE-R6.xpr`). The main RAM
    (up to 12 MB) has to be in the SDRAM, so R3 is out; R4/R5 projects can be
    derived from Megamiga's later.

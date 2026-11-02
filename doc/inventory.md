@@ -485,7 +485,7 @@ HEX to `$readmemh`/VHDL constant init. Unused: SRAMU/SRAML.mif, font.mif.
 | mister_sync | rtl/VIDEO/mister_sync.sv:1 | "Mister video sync for x68000 by Jamie Blanks" — no licence |
 | Altera MegaWizard wrappers | rtl/cycV/*.vhd, SPRITE/*, GPALETTE/gpram, VIDEO/txtpram*, diskemu/sramram etc. | e.g. CACHEMEMN.vhd:21-33 "Copyright (C) 1991-2013 Altera Corporation … subject to the terms and conditions of the Altera Program License Subscription Agreement … for the sole purpose of programming logic devices manufactured by Altera" — must be replaced anyway |
 | MiSTer framework | sys/ (not ported) | e.g. sys/hps_io.sv:4-10 GPL v3 or later |
-| Puu-san's RTL | rtl/*.vhd, MFP, SCC, DMAC, FDC, diskemu, VIDEO, SPRITE, … | **No licence headers, no LICENSE/COPYING file in the repo** (checked). Doc/readme.txt (Shift-JIS) lines 5-11: 「本RTLに関しては、フリーソフトウェアです。」("This RTL is free software."), 「・MC68000 MPUのIP : TG68はTobias Gubenerさんに著作権があります。」(TG68 copyright Tobias Gubener — TG68 is no longer used, fx68k replaced it), 「・ディスクエミュレータに使用しているフォントは東雲フォントがオリジナルです。」(disk-emulator font based on Shinonome font; font.mif unused now), 「その他のRTLに関しては私、プーにあります。」(rights to the other RTL are mine, Puu), 「このRTLに含まれるファイルに関しては一切無保証です。」(no warranty). readme.md:3 "port of the Sharp X68000 core by Puu-san"; no licence section. |
+| Puu-san's RTL | rtl/*.vhd, MFP, SCC, DMAC, FDC, diskemu, VIDEO, SPRITE, … | **No licence headers, no LICENSE/COPYING file in the repo** (checked). Doc/readme.txt (Shift-JIS) lines 5-11: 「本RTLに関しては、フリーソフトウェアです。」("This RTL is free software."), 「・MC68000 MPUのIP : TG68はTobias Gubenerさんに著作権があります。」(TG68 copyright Tobias Gubener — TG68 is no longer used, fx68k replaced it), 「・ディスクエミュレータに使用しているフォントは東雲フォントがオリジナルです。」(disk-emulator font based on Shinonome font; font.mif unused now), 「その他のRTLに関しては私、プーにあります。」(rights to the other RTL are mine, Puu), 「このRTLに含まれるファイルに関しては一切無保証です。」(no warranty). readme.md:3 "port of the Sharp X68000 core by Puu-san"; no licence section. **2026-10-29: Puu-san allows redistribution under GPLv3** (blog reply, doc/plan.md section 4.1). |
 | ROM content | releases/boot.rom (IPL+CGROM), boot3.vhd, sramdefault.hex, sxsidrv.mif | Sharp IPL/CGROM; SxSI driver origin unstated — provenance/redistribution to be verified |
 
 ---------------------------------------------------------------------------------------------
@@ -510,7 +510,8 @@ HEX to `$readmemh`/VHDL constant init. Unused: SRAMU/SRAML.mif, font.mif.
    access, SRAM image load/save, 1 MB boot.rom into SDRAM before CPU release. M2M vdrives is
    QNICE-clocked, 32-bit size, and its buffered model does not fit HDF/HDS → direct SD block
    engine needed (Megamiga ide_engine is the precedent).
-4. **Licensing**. Puu-san's RTL (most of the core) carries no licence grant beyond a Japanese
+4. **Licensing**. (Resolved for Puu-san's RTL on 2026-10-29: GPLv3, `doc/plan.md` section 4.1.)
+   Puu-san's RTL (most of the core) carries no licence grant beyond a Japanese
    "free software" statement with retained rights; IKAOPM, xe1ap, mister_sync have no licence
    text; fx68k/jt51 are GPL-3+, the top is GPL-2+. Combined redistribution terms are unclear
    until Puu's intent (and IKAOPM's upstream licence) is confirmed. ROM images must not ship

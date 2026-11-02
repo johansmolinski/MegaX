@@ -320,3 +320,15 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - **`megax-v`: OK, WNS +0.107 ns, WHS +0.034 ns; 54.4k LUTs, 327.5 / 365 block RAM tiles.
   Hardware: all eight modetest modes work (15, 24 and 31 kHz, 640x480, 1024x848
   interlaced).** Family 3 (75.249 MHz) is not exercised by modetest.
+
+## 2026-11-02 - Licence: GPLv3
+
+- Puu-san answered the user's request on the blog (comment of 2026-10-27 under
+  https://fpga8801.seesaa.net/article/519747422.html) on 2026-10-29:
+  「GPLv3の条件で再配布いただいて問題ありません。更新をよろしくお願いします。」("Redistributing it
+  under the terms of GPLv3 is no problem. I look forward to your updates.") The request was for
+  GPL version 3 or later; the answer names GPLv3 only.
+- `LICENSE`: GNU GPL version 3 (the user's decision). AGENTS.md rule 5, `doc/plan.md` 4.1,
+  `doc/inventory.md` and README updated. The GitHub issue MiSTer-devel/X68000_MiSTer#74
+  (no answer since 2026-10-26) got a comment pointing to the blog reply.
+- Still without licence text: IKAOPM, `xe1ap.v`, `mister_sync.sv`.
