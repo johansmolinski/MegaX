@@ -546,7 +546,12 @@ begin
    main_clk_o  <= main_clk;
    main_rst_o  <= main_rst;
    video_clk_o <= video_clk;
-   video_rst_o <= video_rst;
+   -- The scaler (ascal) is reset by video_rst_o or the HyperRAM reset (digital_pipeline.vhd). A
+   -- core reset resets the HyperRAM controller too; with only the clock lock here, ascal came out
+   -- of reset with the controller and could start its bursts while the controller was still
+   -- initialising the HyperRAM: about every other reset HDMI stayed black (VGA fine) and every
+   -- HyperRAM access hung, QNICE's too. As Megamiga: ascal stays in reset with the core.
+   video_rst_o <= video_rst or main_rst;
 
    ---------------------------------------------------------------------------------------------
    -- main_clk
