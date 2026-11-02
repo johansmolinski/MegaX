@@ -2,7 +2,7 @@
 -- MegaX - Sharp X68000 for MEGA65
 --
 -- Wrapper for the machine: x68_system (the MiSTer core and its MiSTer-top glue) plus what it
--- needs from the MEGA65: the PS/2 keyboard (keyboard.vhd), the SDRAM pins, the video clock
+-- needs from the MEGA65: the PS/2 keyboard (keyboard.vhd) and mouse (mouse.vhd), the SDRAM pins, the video clock
 -- handshake, video into M2M, audio. The boot ROM loader (x68_boot.vhd), the disk images
 -- (x68_sd.vhd, through the hps_io ports here) and the menu live in mega65.vhd.
 --
@@ -105,6 +105,18 @@ entity main is
       kb_key_num_i            : in    integer range 0 to 79;
       kb_key_pressed_n_i      : in    std_logic;
 
+      -- the Amiga mouse (clk_sys; mouse.vhd) and the joysticks (low active: 0 up, 1 down,
+      -- 2 left, 3 right, 4 A, 5 B), chosen from the DB9 ports in mega65.vhd
+      mouse_en_i              : in    std_logic;
+      mouse_h_i               : in    std_logic;
+      mouse_hq_i              : in    std_logic;
+      mouse_v_i               : in    std_logic;
+      mouse_vq_i              : in    std_logic;
+      mouse_l_n_i             : in    std_logic;
+      mouse_r_n_i             : in    std_logic;
+      joy_a_n_i               : in    std_logic_vector(5 downto 0);
+      joy_b_n_i               : in    std_logic_vector(5 downto 0);
+
       -- SDRAM pins
       sdram_clk_o             : out   std_logic;
       sdram_cke_o             : out   std_logic;
@@ -148,6 +160,12 @@ architecture synthesis of main is
    signal kbd_dat       : std_logic;
    signal host_clk      : std_logic;
    signal host_dat      : std_logic;
+
+   -- the mouse's PS/2 lines
+   signal ms_clk        : std_logic;
+   signal ms_dat        : std_logic;
+   signal ms_host_clk   : std_logic;
+   signal ms_host_dat   : std_logic;
 
    -- x68_system's outputs
    signal sd_dqm        : std_logic_vector(1 downto 0);
@@ -320,7 +338,13 @@ begin
          ps2_kbd_clk_i  => kbd_clk,
          ps2_kbd_dat_i  => kbd_dat,
          ps2_kbd_clk_o  => host_clk,
-         ps2_kbd_dat_o  => host_dat
+         ps2_kbd_dat_o  => host_dat,
+         ps2_ms_clk_i   => ms_clk,
+         ps2_ms_dat_i   => ms_dat,
+         ps2_ms_clk_o   => ms_host_clk,
+         ps2_ms_dat_o   => ms_host_dat,
+         joy_a_n        => joy_a_n_i,
+         joy_b_n        => joy_b_n_i
       ); -- i_x68_system
 
    scan_sel_o      <= scan_sel;
@@ -358,6 +382,23 @@ begin
          ps2_clk_i       => host_clk,
          ps2_dat_i       => host_dat
       ); -- i_keyboard
+
+   i_mouse : entity work.mouse
+      port map (
+         clk_i           => clk_sys_i,
+         reset_i         => sys_rst_i,
+         enable_i        => mouse_en_i,
+         h_i             => mouse_h_i,
+         hq_i            => mouse_hq_i,
+         v_i             => mouse_v_i,
+         vq_i            => mouse_vq_i,
+         btn_l_n_i       => mouse_l_n_i,
+         btn_r_n_i       => mouse_r_n_i,
+         ps2_clk_o       => ms_clk,
+         ps2_dat_o       => ms_dat,
+         ps2_clk_i       => ms_host_clk,
+         ps2_dat_i       => ms_host_dat
+      ); -- i_mouse
 
    audio_left_o  <= signed(snd_l);
    audio_right_o <= signed(snd_r);

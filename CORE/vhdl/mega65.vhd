@@ -350,7 +350,8 @@ constant C_MENU_SXSI_BOOT     : natural := 19;
 constant C_MENU_HDMI_720P     : natural := 25;
 constant C_MENU_HDMI_720P50   : natural := 26;
 constant C_MENU_TURBO         : natural := 29;
-constant C_MENU_RESET         : natural := 32;
+constant C_MENU_MOUSE         : natural := 30;  -- "Mouse in port 1" (else joystick 1)
+constant C_MENU_RESET         : natural := 33;
 
 ---------------------------------------------------------------------------------------------
 -- Clocks and resets
@@ -375,6 +376,18 @@ signal qnice_dbg_data         : std_logic_vector(15 downto 0);
 signal qnice_dbg_ce           : std_logic;
 signal qnice_dbg_we           : std_logic;
 signal main_sxsi_inject       : std_logic := '0';
+
+-- the DB9 ports: the mouse and the joysticks (see "Mouse and joysticks" below)
+constant C_POT_TIMEOUT        : natural := 30 * 40_000_000;   -- 30 s of a held POT button
+signal main_mouse_on          : std_logic;
+signal main_joy1_n            : std_logic_vector(5 downto 0);
+signal main_joy2_n            : std_logic_vector(5 downto 0);
+signal main_pot_live          : std_logic_vector(1 downto 0) := "00";   -- pin 9 seen driven
+signal main_pot1_wd           : natural range 0 to C_POT_TIMEOUT := 0;
+signal main_pot2_wd           : natural range 0 to C_POT_TIMEOUT := 0;
+signal main_btn2_n            : std_logic_vector(1 downto 0);
+signal main_joy_a_n           : std_logic_vector(5 downto 0);   -- the X68000's joystick 1
+signal main_joy_b_n           : std_logic_vector(5 downto 0);   -- and 2
 
 ---------------------------------------------------------------------------------------------
 -- boot ROM loader
@@ -527,6 +540,63 @@ begin
    main_joy_2_fire_n_o  <= '1';
 
    ---------------------------------------------------------------------------------------------
+   -- Mouse and joysticks: the DB9 ports
+   ---------------------------------------------------------------------------------------------
+
+   -- "Mouse in port 1" (default): port 1 is the Amiga mouse (mouse.vhd), port 2 the X68000's
+   -- joystick 1. Off: port 1 is joystick 1, port 2 joystick 2. The lines come raw (M2M-UPSTREAM
+   -- raw-joyports: the quadrature pulses must not be filtered) and only from reset on with the
+   -- menu closed (config.vhd JOY_x_AT_RESET / JOY_x_AT_OSD). Amiga mouse: H = pin 2 (down),
+   -- HQ = pin 4 (right), V = pin 1 (up), VQ = pin 3 (left), the left button = pin 6 (fire).
+   --
+   -- The second button (the mouse's right, a 2-button stick's B) is on pin 9, a POT line the
+   -- MEGA65 can only sample as a paddle: a passive switch to GND reads like nothing connected.
+   -- It counts only with an adapter that drives the line (Megamiga's presence latch, as
+   -- PC10-III: a pin 9 seen high arms it, 30 s of "pressed" disarm it again).
+   p_pot : process (main_clk)
+   begin
+      if rising_edge(main_clk) then
+         if main_pot1_x_i(7) = '1' then
+            main_pot_live(0) <= '1';
+            main_pot1_wd     <= 0;
+         elsif main_pot_live(0) = '1' then
+            if main_pot1_wd = C_POT_TIMEOUT then
+               main_pot_live(0) <= '0';
+            else
+               main_pot1_wd <= main_pot1_wd + 1;
+            end if;
+         end if;
+         if main_pot2_x_i(7) = '1' then
+            main_pot_live(1) <= '1';
+            main_pot2_wd     <= 0;
+         elsif main_pot_live(1) = '1' then
+            if main_pot2_wd = C_POT_TIMEOUT then
+               main_pot_live(1) <= '0';
+            else
+               main_pot2_wd <= main_pot2_wd + 1;
+            end if;
+         end if;
+         if main_rst = '1' then
+            main_pot_live <= "00";
+            main_pot1_wd  <= 0;
+            main_pot2_wd  <= 0;
+         end if;
+      end if;
+   end process p_pot;
+
+   main_btn2_n(0) <= not (main_pot_live(0) and not main_pot1_x_i(7));
+   main_btn2_n(1) <= not (main_pot_live(1) and not main_pot2_x_i(7));
+
+   main_mouse_on <= main_osm_control_i(C_MENU_MOUSE);
+   -- low active: 0 up, 1 down, 2 left, 3 right, 4 A (fire), 5 B (pin 9)
+   main_joy1_n   <= main_btn2_n(0) & main_joy_1_fire_n_i & main_joy_1_right_n_i &
+                    main_joy_1_left_n_i & main_joy_1_down_n_i & main_joy_1_up_n_i;
+   main_joy2_n   <= main_btn2_n(1) & main_joy_2_fire_n_i & main_joy_2_right_n_i &
+                    main_joy_2_left_n_i & main_joy_2_down_n_i & main_joy_2_up_n_i;
+   main_joy_a_n  <= main_joy2_n when main_mouse_on = '1' else main_joy1_n;
+   main_joy_b_n  <= (others => '1') when main_mouse_on = '1' else main_joy2_n;
+
+   ---------------------------------------------------------------------------------------------
    -- Clocks
    ---------------------------------------------------------------------------------------------
 
@@ -643,6 +713,15 @@ begin
 
          kb_key_num_i         => main_kb_key_num_i,
          kb_key_pressed_n_i   => main_kb_key_pressed_n_i,
+         mouse_en_i           => main_mouse_on,
+         mouse_h_i            => main_joy_1_down_n_i,
+         mouse_hq_i           => main_joy_1_right_n_i,
+         mouse_v_i            => main_joy_1_up_n_i,
+         mouse_vq_i           => main_joy_1_left_n_i,
+         mouse_l_n_i          => main_joy_1_fire_n_i,
+         mouse_r_n_i          => main_btn2_n(0),
+         joy_a_n_i            => main_joy_a_n,
+         joy_b_n_i            => main_joy_b_n,
 
          sdram_clk_o          => sdram_clk_o,
          sdram_cke_o          => sdram_cke_o,

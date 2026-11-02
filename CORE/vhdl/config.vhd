@@ -138,8 +138,8 @@ constant OPTM_PAUSE        : boolean := false;     -- hard rule 7
 constant WELCOME_ACTIVE    : boolean := false;
 constant WELCOME_AT_RESET  : boolean := false;
 constant KEYBOARD_AT_RESET : boolean := false;
-constant JOY_1_AT_RESET    : boolean := false;
-constant JOY_2_AT_RESET    : boolean := false;
+constant JOY_1_AT_RESET    : boolean := true;    -- the mouse and the joysticks (mega65.vhd)
+constant JOY_2_AT_RESET    : boolean := true;
 constant KEYBOARD_AT_OSD   : boolean := false;
 constant JOY_1_AT_OSD      : boolean := false;
 constant JOY_2_AT_OSD      : boolean := false;
@@ -226,19 +226,21 @@ constant OPTM_S_SAVING     : string := "<Saving>";
 --    27  ----                     
 --    28  Back to main menu        
 --    29  68000 at 20 MHz          C_MENU_TURBO (MiSTer's "Turbo"; default off: 10 MHz)
---    30  ----                     
---    31  Help                     
---    32  Reset the X68000         C_MENU_RESET (momentary: the firmware resets and clears it)
---    33  ----                     
---    34  Close Menu               
+--    30  Mouse in port 1          C_MENU_MOUSE (default on: port 1 the Amiga mouse, port 2
+--                                 joystick 1; off: ports 1 and 2 joysticks 1 and 2)
+--    31  ----                     
+--    32  Help                     
+--    33  Reset the X68000         C_MENU_RESET (momentary: the firmware resets and clears it)
+--    34  ----                     
+--    35  Close Menu               
 --
 -- The settings file keeps one byte per line, so the layout is part of its format: the
 -- firmware's CFG_SIGCHECK accepts only a file whose text carries this menu's signature
 -- (m2m-rom.asm, CFG_SIG_VAL; change it with every layout change), any other file is reset to
 -- the defaults.
-constant OPTM_SIZE         : natural := 35;
+constant OPTM_SIZE         : natural := 36;
 constant OPTM_DX           : natural := 30;
-constant OPTM_DY           : natural := 19;   -- the visible main menu (lines 0-11, 22, 29-34)
+constant OPTM_DY           : natural := 20;   -- the visible main menu (lines 0-11, 22, 29-35)
 
 constant OPTM_ITEMS        : string :=
    " MegaX\n"                    &
@@ -271,6 +273,7 @@ constant OPTM_ITEMS        : string :=
    "\n"                          &
    " Back to main menu\n"        &
    " 68000 at 20 MHz\n"          &
+   " Mouse in port 1\n"          &
    "\n"                          &
    " Help\n"                     &
    " Reset the X68000\n"         &
@@ -295,6 +298,7 @@ constant OPTM_G_SXSIINJ    : integer := 14;
 constant OPTM_G_SXSIBOOT   : integer := 15;
 constant OPTM_G_SXSI3      : integer := 16;
 constant OPTM_G_SXSI4      : integer := 17;
+constant OPTM_G_MOUSE      : integer := 18;
 
 type OPTM_GTYPE is array (0 to OPTM_SIZE - 1) of integer range 0 to 2**OPTM_GTC- 1;
 
@@ -329,11 +333,12 @@ constant OPTM_GROUPS       : OPTM_GTYPE := (
                                              OPTM_G_LINE,                              -- 27
                                              OPTM_G_CLOSE + OPTM_G_SUBMENU,            -- 28 Back to main menu
                                              OPTM_G_TURBO + OPTM_G_SINGLESEL,          -- 29 68000 at 20 MHz
-                                             OPTM_G_LINE,                              -- 30
-                                             OPTM_G_HELP,                              -- 31 Help
-                                             OPTM_G_RESET + OPTM_G_SINGLESEL,          -- 32 Reset the X68000
-                                             OPTM_G_LINE,                              -- 33
-                                             OPTM_G_CLOSE                              -- 34 Close Menu
+                                             OPTM_G_MOUSE + OPTM_G_SINGLESEL + OPTM_G_STDSEL, -- 30 Mouse in port 1
+                                             OPTM_G_LINE,                              -- 31
+                                             OPTM_G_HELP,                              -- 32 Help
+                                             OPTM_G_RESET + OPTM_G_SINGLESEL,          -- 33 Reset the X68000
+                                             OPTM_G_LINE,                              -- 34
+                                             OPTM_G_CLOSE                              -- 35 Close Menu
                                            );
 
 -- M2M-UPSTREAM menu-rows (Megamiga, M2M/rom/menu_rows.asm): radio groups drawn as a row. None

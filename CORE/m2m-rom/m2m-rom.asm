@@ -636,9 +636,10 @@ CFG_SIGSET      SYSCALL(enter, 1)
 ; "2": 18 lines, FDD0 and FDD1 at lines 2-3. "3": 33 lines, the images FDD0,
 ; FDD1, SASI, SxSI 1, SxSI 2, SRAM at lines 2-7, the "Disks and SRAM" submenu.
 ; "4": 35 lines, SxSI 3 and SxSI 4 after SxSI 2 (the images at lines 2-9).
+; "5": 36 lines, "Mouse in port 1" after "68000 at 20 MHz".
 ; At most 3 characters (CFG_SIGCHECK's buffer).
 CFG_SIG_KEY     .ASCII_W "menu"
-CFG_SIG_VAL     .ASCII_W "4"
+CFG_SIG_VAL     .ASCII_W "5"
 
 ; ----------------------------------------------------------------------------
 ; The FAT32 write layer (the Shell creates and resizes the settings file with

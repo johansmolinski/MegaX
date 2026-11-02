@@ -25,8 +25,10 @@
 -- The keyboard is MiSTer's PS/2 path (KBCONV with the "MiSTer" layout); the
 -- platform plays the PS/2 keyboard (keyboard.vhd on the MEGA65).
 --
--- Status 2026-10-27 (phase 3): no mouse or joysticks yet (tied to their idle
--- levels, as on a MiSTer with nothing plugged in).
+-- The mouse is MiSTer's PS/2 path too (MOUSECONV in the SCC); the platform plays
+-- the PS/2 mouse (mouse.vhd on the MEGA65). The joysticks are the core's 2-button
+-- ports (pJoyA/pJoyB, low active: 0 up, 1 down, 2 left, 3 right, 4 trigger A,
+-- 5 trigger B; X68000.sv's default mode), the strobe lines are not used.
 ----------------------------------------------------------------------------------
 
 library ieee;
@@ -119,7 +121,17 @@ port (
    ps2_kbd_clk_i  : in    std_logic;
    ps2_kbd_dat_i  : in    std_logic;
    ps2_kbd_clk_o  : out   std_logic;
-   ps2_kbd_dat_o  : out   std_logic
+   ps2_kbd_dat_o  : out   std_logic;
+
+   -- PS/2 mouse (clk_sys): the device's lines in, the host's (MOUSECONV) out
+   ps2_ms_clk_i   : in    std_logic;
+   ps2_ms_dat_i   : in    std_logic;
+   ps2_ms_clk_o   : out   std_logic;
+   ps2_ms_dat_o   : out   std_logic;
+
+   -- joysticks (clk_sys, low active): 0 up, 1 down, 2 left, 3 right, 4 A, 5 B
+   joy_a_n        : in    std_logic_vector(5 downto 0);
+   joy_b_n        : in    std_logic_vector(5 downto 0)
 );
 end entity x68_system;
 
@@ -376,12 +388,12 @@ begin
       pPs2Clkout       => ps2_kbd_clk_o,
       pPs2Datin        => ps2_kbd_dat_i,
       pPs2Datout       => ps2_kbd_dat_o,
-      pPmsClkin        => '1',
-      pPmsClkout       => open,
-      pPmsDatin        => '1',
-      pPmsDatout       => open,
-      pJoyA            => (others => '1'),
-      pJoyB            => (others => '1'),
+      pPmsClkin        => ps2_ms_clk_i,
+      pPmsClkout       => ps2_ms_clk_o,
+      pPmsDatin        => ps2_ms_dat_i,
+      pPmsDatout       => ps2_ms_dat_o,
+      pJoyA            => joy_a_n,
+      pJoyB            => joy_b_n,
       pStrA            => open,
       pStrB            => open,
       pJoySelA         => open,
