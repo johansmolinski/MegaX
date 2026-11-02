@@ -45,6 +45,14 @@ Rules:
   while the controller was still in a write burst and was swallowed (the arbiter saw it
   accepted). HDMI stayed black (OSD and VGA fine) until the next reset, QNICE's HyperRAM reads
   hung. Found with the hr-debug probe (megax-zf, megax-zg).
+- **hr-burst-cut** (2026-11-02; `vhdl/controllers/hyperram/hyperram_ctrl.vhd`): in
+  WRITE_BURST_ST the controller had no waitrequest, so a read arriving while a write burst still
+  waited for words was accepted and lost. Now such a read is held (combinational waitrequest),
+  the write burst ends early (CS high, RECOVERY_ST) and the read follows; a 4-bit counter
+  counts the cuts. Why: megax-zh (with ascal-avl-reset) still lost every read after some
+  resets (HDMI showed only vertical bars: the watchdog restarting ascal on stale lines), so
+  something else still cuts write bursts short. Temporarily `count_short_o` bits 31..16 carry
+  the state, the missing burst words and the cut counter for hr-debug.
 - **hr-debug** (2026-11-02, temporary; `vhdl/framework.vhd`, `vhdl/top_mega65-r6.vhd`): a
   64-bit debug word out of the framework (`hr_dbg_o`, hr_clk domain): the HyperRAM arbiter's
   request/acknowledge lines towards the controller, the scaler and QNICE, `hr_rst`, counters of

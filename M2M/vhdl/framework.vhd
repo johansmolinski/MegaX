@@ -772,7 +772,9 @@ begin
          -- M2M-UPSTREAM hr-debug: 63..48 now ascal's read pipeline state
          -- (was the QNICE command counter and the burst count)
          hr_dbg_o <= std_logic_vector(ascal_dbg) &
-                     std_logic_vector(hr_dbg_rdv) & std_logic_vector(hr_dbg_cmd) &
+                     -- 31..16: the controller's state, missing burst words, cut counter
+                     -- (hyperram_ctrl count_short_o, M2M-UPSTREAM hr-burst-cut)
+                     std_logic_vector(hr_dbg_rdv) & std_logic_vector(hr_count_short(31 downto 16)) &
                      "000" & hr_rst &
                      hr_qnice_readdatavalid & hr_qnice_waitrequest & hr_qnice_read & hr_qnice_write &
                      hr_dig_readdatavalid & hr_dig_waitrequest & hr_dig_read & hr_dig_write &

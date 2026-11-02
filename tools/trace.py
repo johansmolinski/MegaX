@@ -69,7 +69,12 @@ if status:
                  "scl_write", "scl_read", "scl_waitreq", "scl_rdvalid",
                  "qn_write", "qn_read", "qn_waitreq", "qn_rdvalid", "hr_rst"]
         print("hyperram %04X: " % h + " ".join("%s=%d" % (n, h >> i & 1) for i, n in enumerate(names)))
-        for k, (name, a, b) in enumerate([("commands accepted", 13, 13), ("read words", 14, 14)]):
+        c = dumps[1][13]
+        print("controller: state=%s burst words missing=%d burst cuts=%d (then %d)" % (
+              ["INIT", "COMMAND_ADDRESS", "WAIT", "SAMPLE_RWDS", "LATENCY", "READ", "WRITE",
+               "WRITE_BURST", "RECOVERY"][c >> 12] if c >> 12 < 9 else "?",
+              c >> 4 & 0xFF, dumps[0][13] & 15, c & 15))
+        for k, (name, a, b) in enumerate([("read words", 14, 14)]):
             print("%s: %d, then %d (%s)" % (name, dumps[0][a], dumps[1][a],
                   "moving" if dumps[0][a] != dumps[1][a] else "STOPPED"))
         # ascal's output read pipeline (M2M-UPSTREAM hr-debug, word 15) and its read watchdog

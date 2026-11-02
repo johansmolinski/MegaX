@@ -90,6 +90,11 @@ architecture synthesis of hyperram_ctrl is
    signal   count_long  : unsigned(31 downto 0);
    signal   count_short : unsigned(31 downto 0);
 
+   -- M2M-UPSTREAM hr-burst-cut (MegaX 2026-11-02): avm_waitrequest_o was this register
+   -- alone; a read in WRITE_BURST_ST is now held (see the state) and counted
+   signal   waitreq_r   : std_logic;
+   signal   cut_count   : unsigned(3 downto 0);
+
 begin
 
    fsm_proc : process (clk_i)
@@ -117,7 +122,7 @@ begin
                   command_address(R_CA_RESERVED) <= "0000000000000";
                   command_address(R_CA_ADDR_LSB) <= avm_address_i(2 downto 0);
 
-                  avm_waitrequest_o              <= '1';
+                  waitreq_r                      <= '1';
                   hb_csn_o                       <= '0';
                   hb_dq_oe_o                     <= '1';
                   ca_count                       <= 2;
@@ -198,9 +203,22 @@ begin
                byteenable        <= avm_byteenable_i;
                hb_dq_oe_o        <= '1';
                hb_rwds_oe_o      <= '1';
-               avm_waitrequest_o <= '0';
+               waitreq_r         <= '0';
 
-               if avm_write_i = '1' or state = WRITE_ST then
+               -- M2M-UPSTREAM hr-burst-cut (MegaX 2026-11-02): a read while a write burst
+               -- still waits for words means the burst was cut short upstream (MegaX: HDMI
+               -- black after some resets, every read swallowed here since WRITE_BURST_ST
+               -- has no waitrequest). The read is held (avm_waitrequest_o below), the burst
+               -- ends early (CS high) and the read follows from INIT_ST.
+               if state = WRITE_BURST_ST and avm_read_i = '1' and avm_write_i = '0' then
+                  hb_ck_ddr_o       <= "00";
+                  hb_dq_oe_o        <= '0';
+                  hb_rwds_oe_o      <= '0';
+                  waitreq_r         <= '1';
+                  recovery_count    <= 2;
+                  cut_count         <= cut_count + 1;
+                  state             <= RECOVERY_ST;
+               elsif avm_write_i = '1' or state = WRITE_ST then
                   hb_ck_ddr_o <= "10";
                   if write_clk_count > 0 then
                      write_clk_count <= write_clk_count - 1;
@@ -208,7 +226,7 @@ begin
                         recovery_count    <= 2;
                         hb_dq_oe_o        <= '0';
                         hb_rwds_oe_o      <= '0';
-                        avm_waitrequest_o <= '1';
+                        waitreq_r         <= '1';
                         state             <= RECOVERY_ST;
                      end if;
                   end if;
@@ -222,14 +240,14 @@ begin
                if recovery_count > 0 then
                   recovery_count <= recovery_count - 1;
                else
-                  avm_waitrequest_o <= '0';
+                  waitreq_r         <= '0';
                   state             <= INIT_ST;
                end if;
 
          end case;
 
          if rst_i = '1' then
-            avm_waitrequest_o <= '1';
+            waitreq_r         <= '1';
             state             <= INIT_ST;
             hb_rstn_o         <= '0';
             hb_ck_ddr_o       <= (others => '0');
@@ -238,6 +256,7 @@ begin
             hb_rwds_oe_o      <= '0';
             count_long        <= (others => '0');
             count_short       <= (others => '0');
+            cut_count         <= (others => '0');
          end if;
       end if;
    end process fsm_proc;
@@ -254,7 +273,16 @@ begin
 
    -- Statistics
    count_long_o        <= count_long;
-   count_short_o       <= count_short;
+   -- M2M-UPSTREAM hr-burst-cut: the read held while a write burst waits for words
+   avm_waitrequest_o   <= '1' when waitreq_r = '1' or
+                                   (state = WRITE_BURST_ST and avm_read_i = '1' and avm_write_i = '0') else
+                          '0';
+
+   -- M2M-UPSTREAM hr-debug (temporary): bits 31..16 of count_short are the state (31..28),
+   -- the write burst words still missing (27..20) and the cut counter (19..16)
+   count_short_o       <= to_unsigned(state_type'pos(state), 4) &
+                          to_unsigned(write_clk_count, 8) & cut_count &
+                          count_short(15 downto 0);
 
 end architecture synthesis;
 
