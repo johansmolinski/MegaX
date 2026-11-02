@@ -258,7 +258,7 @@ FD_MAPW         .EQU    512                     ; map words: 127 extents
 ; ADF_TB_SETUP): the extent map, the number of sectors (rounded up), the block
 ; of cluster 0 (DEV_CLUSTER - (2 << shift)), the cluster size, the file size
 ; and the card; the mode goes last (it mounts the image in the core). The
-; handle is moved to the end of the file.
+; handle is moved to the end of the file through the map.
 ; Input:  R8: file handle, R9: slot 0..7, R10: MODE bits besides on and card
 ;         (bit 2: a sector image)
 ; Output: R8: 0 = OK, 1 = more extents than the map holds, 2 = FAT32 error;
@@ -345,14 +345,18 @@ _FDSU_SHD       MOVE    2, R7                   ; base = DEV_CLUSTER - (2 << shi
 _FDSU_S0        MOVE    FD_MODE, R3             ; mode last: the mount
                 MOVE    R6, @R3
 
-                MOVE    R0, R8                  ; the handle to the end
-                MOVE    R0, R9
+                MOVE    R1, R8                  ; the handle to the end,
+                MOVE    FD_MAPWIN, R9           ; through the extent map (no
+                RSUB    FD_SEL, 1               ; second walk of the chain:
+                MOVE    R0, R8                  ; f32_fseek took as long as
+                MOVE    R0, R9                  ; the map itself)
                 ADD     FAT32$FDH_SIZE_LO, R9
                 MOVE    @R9, R9
                 MOVE    R0, R10
                 ADD     FAT32$FDH_SIZE_HI, R10
                 MOVE    @R10, R10
-                SYSCALL(f32_fseek, 1)
+                MOVE    FD_MAP, R11
+                RSUB    FAT32$FILE_SEEK_MAP, 1
                 MOVE    2, R7
                 CMP     0, R9
                 RBRA    _FDSU_RET, !Z
