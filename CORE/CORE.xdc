@@ -40,6 +40,10 @@ set GCLR [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_main
 set_multicycle_path 1 -setup -end -from [get_clocks main_clk] -to $GCLR
 set_multicycle_path 0 -hold  -end -from [get_clocks main_clk] -to $GCLR
 
+# M2M-UPSTREAM hr-debug (temporary): ascal's read pipeline state (hdmi_clk) into the HyperRAM
+# probe word (hr_clk), read by QNICE only while it stands still
+set_false_path -from [get_clocks hdmi_clk] -to [get_cells -hierarchical -filter {NAME =~ i_framework/hr_dbg_o_reg*}]
+
 ## X68000.sdc: the 68000 (fx68k: phi1/phi2 enables at most every second clk_sys clock) and the
 ## DMA controller (DMA63450) work on enables: two clocks for paths from and to them. Counted in
 ## destination clocks for setup AND hold (-end): with Vivado's default (-start) for hold, a

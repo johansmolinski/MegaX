@@ -36,6 +36,15 @@ Rules:
   buffer, seen as red snow) and loaded the HyperRAM so much that at 720p60 the
   scaler lost the top of the frame every few seconds (`doc/history.md`,
   2026-10-27).
+- **ascal-avl-reset** (2026-11-02; `vhdl/av_pipeline/ascal.vhd`, `digital_pipeline.vhd`): ascal's
+  Avalon side gets its own reset input `reset_avl_na` (default '1'), driven with `not hr_rst_i`;
+  the input and output sides keep `reset_na` (video_rst or hr_rst). Why: in MegaX `video_rst`
+  comes without the HyperRAM reset (core resets, the X68000's video clock reprogrammed per
+  mode). A reset in the middle of an ascal write burst cut the burst short; the HyperRAM
+  controller waited for the missing words, every later burst was shifted and every read arrived
+  while the controller was still in a write burst and was swallowed (the arbiter saw it
+  accepted). HDMI stayed black (OSD and VGA fine) until the next reset, QNICE's HyperRAM reads
+  hung. Found with the hr-debug probe (megax-zf, megax-zg).
 - **hr-debug** (2026-11-02, temporary; `vhdl/framework.vhd`, `vhdl/top_mega65-r6.vhd`): a
   64-bit debug word out of the framework (`hr_dbg_o`, hr_clk domain): the HyperRAM arbiter's
   request/acknowledge lines towards the controller, the scaler and QNICE, `hr_rst`, counters of

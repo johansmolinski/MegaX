@@ -572,7 +572,9 @@ begin
          avl_byteenable    => hr_wide_byteenable,           -- output
 
          -- Asynchronous reset, active low
-         reset_na          => reset_na                      -- input
+         reset_na          => reset_na,                     -- input
+         -- M2M-UPSTREAM ascal-avl-reset: the Avalon side only with the HyperRAM
+         reset_avl_na      => not hr_rst_i                  -- input
       ); -- i_ascal
 
    i_avm_decrease : entity work.avm_decrease

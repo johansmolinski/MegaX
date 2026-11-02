@@ -260,7 +260,10 @@ ENTITY ascal IS
     avl_byteenable     : OUT   std_logic_vector(N_DW/8-1 DOWNTO 0);
     
     ------------------------------------
-    reset_na           : IN    std_logic
+    reset_na           : IN    std_logic;
+    -- M2M-UPSTREAM ascal-avl-reset (MegaX 2026-11-02): the Avalon side's own
+    -- reset, see avl_reset_na below
+    reset_avl_na       : IN    std_logic := '1'
     );
 
 BEGIN
@@ -1147,7 +1150,13 @@ BEGIN
            to_unsigned(o_readlev,2) &
            to_unsigned(enum_o_copy'POS(o_copy),2) &
            to_unsigned(enum_o_state'POS(o_state),2);
-  avl_reset_na<='0' WHEN reset_na='0' ELSE '1' WHEN rising_edge(avl_clk);
+  -- M2M-UPSTREAM ascal-avl-reset (MegaX 2026-11-02): the Avalon side is reset
+  -- only with the memory controller (reset_avl_na), never alone: a reset in the
+  -- middle of a write burst left the HyperRAM controller waiting for the rest of
+  -- the burst, every later burst shifted and every read swallowed (HDMI black
+  -- after about every other core reset or video clock change). Original:
+  -- avl_reset_na<='0' WHEN reset_na='0' ELSE '1' WHEN rising_edge(avl_clk);
+  avl_reset_na<='0' WHEN reset_avl_na='0' ELSE '1' WHEN rising_edge(avl_clk);
   
   -----------------------------------------------------------------------------
   -- Input pixels FIFO and shreg
