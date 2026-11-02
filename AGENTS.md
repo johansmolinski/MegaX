@@ -53,9 +53,10 @@ names).
    redistribution of the X68000 RTL under GPLv3 on 2026-10-29 (blog reply,
    `doc/plan.md` section 4.1); "or later" was asked but not confirmed. No
    licence headers in our files unless the user asks for them.
-6. **Board: MEGA65 R6 only** for now (one `CORE/CORE-R6.xpr`). The main RAM
-   (up to 12 MB) has to be in the SDRAM, so R3 is out; R4/R5 projects can be
-   derived from Megamiga's later.
+6. **Board: MEGA65 R6 only** (one `CORE/CORE-R6.xpr`; the user, 2026-11-02:
+   R4 and R5 are prototype boards, very few exist). R3 is out: not because of
+   the 12 MB, but because the ROM, the upper GVRAM half and the D88 cache need
+   SDRAM too and R3 has only the scaler's HyperRAM (`doc/plan.md` section 4.4).
 7. **Hardware rules from Megamiga apply** (`~/git/pub/AExp/AGENTS.md`):
    .xpr SFType tokens only `VHDL2008`, `SVerilog` or none (anything else
    segfaults Vivado); video into the framework with active-high syncs and

@@ -145,3 +145,20 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
    SDRAM fallback of section 2.2.
 3. **Name and SD card folder** (the user, 2026-10-26): the core is **MegaX**;
    its files (`boot.rom`, disk images, settings file) live in `/megax`.
+4. **Board: R6 only** (the user, 2026-11-02). R4 and R5 are prototype boards
+   (very few exist); they have the same SDRAM, so a project for them stays
+   cheap if ever wanted. **R3 is out**, and a smaller main RAM would not change
+   that: besides main RAM (1-12 MB) the SDRAM holds the IPL and CGROM (1 MB),
+   the upper GVRAM half (256 KB, read by the video on every line, a hard
+   deadline) and the D88/SASI caches; the block RAM is the same chip on R3 and
+   `megax-v` uses 327.5 of 365 tiles. R3's only external RAM is the 8 MB
+   HyperRAM that ascal already uses: the size would fit, the latency (15-20
+   clocks per single access, up to ~1.6 us behind an ascal burst) does not fit
+   cachecont's SDRAM design. Megamiga dropped R3 for the same reason (0.2.0).
+   R3 would need a HyperRAM backend for main RAM, ROM and GVRAM, a feasibility
+   measurement first (memory traffic per line against HyperRAM latency under
+   ascal load), and R3's top adapted for the SD sector service.
+5. **Stock 1, 2 and 4 MB machines** need no smaller physical RAM: MiSTer's
+   "Visible Memory" option (`X68000.sv` `P3O[74:71]`: Auto, 1-12 MB, the
+   `vis_mem` byte in SRAM at $ED0008) sets what the software sees. Not yet in
+   our menu (phase 5 candidate).
