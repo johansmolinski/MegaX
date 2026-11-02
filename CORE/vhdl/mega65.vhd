@@ -99,6 +99,7 @@ port (
    hr_core_waitrequest_i   : in  std_logic;
    hr_high_i               : in  std_logic;  -- Core is too fast
    hr_low_i                : in  std_logic;  -- Core is too slow
+   hr_dbg_i                : in  std_logic_vector(63 downto 0) := (others => '0');  -- M2M-UPSTREAM hr-debug
 
    --------------------------------------------------------------------------------------------------------
    -- Video Clock Domain
@@ -745,6 +746,7 @@ begin
          clk_sys_i            => main_clk,
          bus_i                => main_dbg_bus,
          opm_i                => main_dbg_opm,
+         hr_i                 => hr_dbg_i,
          qnice_clk_i          => qnice_clk_i,
          qnice_addr_i         => qnice_dev_addr_i,
          qnice_data_i         => qnice_dev_data_i,

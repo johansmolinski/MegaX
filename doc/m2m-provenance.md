@@ -36,3 +36,10 @@ Rules:
   buffer, seen as red snow) and loaded the HyperRAM so much that at 720p60 the
   scaler lost the top of the frame every few seconds (`doc/history.md`,
   2026-10-27).
+- **hr-debug** (2026-11-02, temporary; `vhdl/framework.vhd`, `vhdl/top_mega65-r6.vhd`): a
+  64-bit debug word out of the framework (`hr_dbg_o`, hr_clk domain): the HyperRAM arbiter's
+  request/acknowledge lines towards the controller, the scaler and QNICE, `hr_rst`, counters of
+  accepted commands, delivered read words and QNICE's accepted commands, the burst count; shown
+  by `x68_trace.vhd` (registers 0x0C-0x0F, `tools/trace.py --status`). Why: about every other
+  reset HDMI stays black and every HyperRAM access hangs (QNICE's too); to see who waits for
+  whom. To be removed with the fix.

@@ -43,7 +43,7 @@ if writes:
     print(qmon(["MCFFF40110", "MCFFF50000", "MC80000002"], qargs))
     sys.exit(0)
 if status:
-    out = qmon(["MCFFF40110", "MCFFF50000", "MD8000800B", "MD8000800B"], qargs)
+    out = qmon(["MCFFF40110", "MCFFF50000", "MD8000800F", "MD8000800F"], qargs)
     print(out)
     # the OPM bus wait probe (register 9, X68K_top's dbg_opm) and the opm_ce(0) pulse counter
     # (registers 10/11), from both dumps: the counter must move between them (4 MHz)
@@ -61,6 +61,17 @@ if status:
               " ".join("%s=%d" % (n, o >> (i + 2) & 1) for i, n in enumerate(names)))
         c0, c1 = (w[10] | w[11] << 16 for w in dumps)
         print("opm_ce(0) pulses: %d, then %d (%s)" % (c0, c1, "running" if c1 != c0 else "STOPPED"))
+    # the framework's HyperRAM debug word (registers 12..15, M2M-UPSTREAM hr-debug)
+    if len(dumps) == 2 and all(len(w) >= 16 for w in dumps):
+        h = dumps[1][12]
+        names = ["ctl_write", "ctl_read", "ctl_waitreq", "ctl_rdvalid",
+                 "scl_write", "scl_read", "scl_waitreq", "scl_rdvalid",
+                 "qn_write", "qn_read", "qn_waitreq", "qn_rdvalid", "hr_rst"]
+        print("hyperram %04X: " % h + " ".join("%s=%d" % (n, h >> i & 1) for i, n in enumerate(names)))
+        for k, (name, a, b) in enumerate([("commands accepted", 13, 13), ("read words", 14, 14)]):
+            print("%s: %d, then %d (%s)" % (name, dumps[0][a], dumps[1][a],
+                  "moving" if dumps[0][a] != dumps[1][a] else "STOPPED"))
+        print("burst count %d, QNICE commands accepted %d" % (dumps[1][15] & 0xFF, dumps[1][15] >> 8))
     sys.exit(0)
 if arm:
     a, _, m = arm.partition("/")
