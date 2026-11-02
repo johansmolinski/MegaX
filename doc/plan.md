@@ -162,3 +162,15 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
    "Visible Memory" option (`X68000.sv` `P3O[74:71]`: Auto, 1-12 MB, the
    `vis_mem` byte in SRAM at $ED0008) sets what the software sees. Not yet in
    our menu (phase 5 candidate).
+6. **X68030** (the user, 2026-11-02): interesting only as a full X68030, ideally the X68000
+   and the X68030 in one core, chosen in the menu (as Megamiga's machine choice); not an
+   accelerator on the X68000. After 0.1, starting with a feasibility study:
+   - CPU: the X68030 has a 68EC030 (no MMU) at 25 MHz, so a 68020-class core may do (TG68K's
+     68020 mode: check what the X68030 IPL needs: MOVEC CACR/CAAR, the cache instructions,
+     the FPU probe). fx68k stays the X68000's CPU (cycle-exact); the choice is a CPU mux.
+   - The bus: the core's memory path (cachecont, SDRAMC) is the 68000's 16-bit bus; the
+     X68030 has a 32-bit one. Logic fits (megax-zk: 41 % LUTs), block RAM is tight (90 %).
+   - SCSI: the X68030 boots from its built-in SCSI (MB89352 SPC); the MiSTer core has only
+     SASI and SxSI. An SPC model is the largest new piece.
+   - The X68030's own IPL ROM and CGROM from the SD card (rule 4: no Sharp ROMs in the
+     repository), the other differences (memory map, SRAM, clocks) from the IPL's needs.
