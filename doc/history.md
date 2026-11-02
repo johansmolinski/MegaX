@@ -357,3 +357,41 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - Open: in simulation the DIM's boot sector stops after reading the FAT and root directory
   (`h68-b`: an IOCS call that looks like an error exit at 1.878 s), while the board loads
   HUMAN.SYS from the same image: probably the testbench's DIM handling, not looked into.
+
+## 2026-11-02 - SxSI 3/4, the fast clear, HDMI black after a reset
+
+- **SxSI 3 and SxSI 4 in the menu** (`megax-y`, `18d456c`): devices 0x0107/0x0108 (x68_sd
+  already served slots 6/7), 8 manual loads, settings keys `sxsi3`/`sxsi4`, menu signature 4
+  (35 lines; an older settings file is reset). A 4-image HDS pack (1 GB + 3 x 2 GB) boots.
+- **Fast clear hang** (TwinBee, the pack's boot sometimes stopped in `BTST #1,$E80481` at
+  `$04C2F4`): `vcreg`'s FCbgn/FCend were combinational from the CPU bus into the 80 MHz fast
+  clear logic behind the main_clk -> clk_ram multicycle (18.6 ns paths), a phantom FCend ended
+  the clear early. Fork `fbdf1fd`: both registered on clk (originals commented), `CORE.xdc`
+  takes gclrbgnrq/gclrendrq out of the multicycle. Since `megax-zb` no hang seen.
+- **Faster mounts** (seek to the end through the extent map, QNICE branch `megax-fastmap`):
+  `megax-z/za` booted the wrong or no disk, `megax-ze` mounted a 40 MB SASI image correctly but
+  a 2 GB HDS from the menu ended in a FATAL (803F). Reverted on main (`395c350`), open.
+- **HDMI black after about every other reset** (VGA fine, OSD shown on HDMI, the picture
+  flashing on HDMI while the reset button is pressed; Megamiga never does this):
+  - `megax-zc` (fixed video clock) and `megax-zd2` (ascal held in reset with the core): no
+    change. QNICE HyperRAM reads hung in the bad state.
+  - `megax-zf`, probe `hr-debug` (the arbiter's lines and counters in `x68_trace` 0x0C-0x0F,
+    `trace.py --status`): on the first load already black; the scaler wrote 64-word bursts on
+    and on, the controller returned no read data any more (256 words since the load).
+  - `megax-zg`: ascal read watchdog (a whole output frame without read progress restarts the
+    read pipeline) and ascal's state in the probe. 8 resets fine, the 9th black: readlev=2,
+    copylev=0, the watchdog firing every frame, still no read data from the controller.
+  - Cause: the HyperRAM controller has no waitrequest in WRITE_BURST_ST. When a write burst is
+    cut short upstream, the controller waits for the missing words, later bursts are shifted
+    and every read arrives during a "burst" and is lost (the arbiter sees it accepted). In
+    MegaX ascal is reset by `video_rst` without the HyperRAM (core resets, the video clock
+    reprogrammed per mode); a reset in the middle of a write burst cuts it.
+  - `megax-zh` (`b71bf1e`): ascal's Avalon side reset only with the HyperRAM
+    (`ascal-avl-reset`). Better, but on the 6th reset HDMI showed only vertical bars (the
+    watchdog restarting ascal on stale line buffers): something else still cuts bursts.
+  - `megax-zi` (`91e36a5`): the controller holds a read during an unfinished write burst, cuts
+    the burst (CS high) and does the read (`hr-burst-cut`). **20 resets and several games
+    (TwinBee, Dracula) without a black screen.** Timing: 73 ps short on the new combinational
+    waitrequest path (QNICE FIFO - arbiter - controller - arbiter - ascal).
+  - `megax-zj` (`628a660`): the same recovery registered (the read taken in WRITE_BURST_ST is
+    started from RECOVERY_ST), the cut and watchdog counters counting since the load.
