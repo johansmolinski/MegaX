@@ -499,7 +499,7 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL o_fload : natural RANGE 0 TO 3;
   -- M2M-UPSTREAM hr-debug: the read watchdog (Scalaire)
   SIGNAL o_wd_prog : std_logic;
-  SIGNAL o_wd_cnt : unsigned(3 DOWNTO 0);
+  SIGNAL o_wd_cnt : unsigned(3 DOWNTO 0) := x"0"; -- since the configuration
   SIGNAL o_acpt,o_acpt1,o_acpt2,o_acpt3,o_acpt4 : natural RANGE 0 TO 15; -- Alternance pixels FIFO
   SIGNAL o_dshi : natural RANGE 0 TO 3;
   SIGNAL o_first,o_last,o_last1,o_last2 : std_logic;
@@ -1911,7 +1911,6 @@ BEGIN
       o_hsp<='0';
       o_hspn<=0;
       o_wd_prog<='0'; -- M2M-UPSTREAM hr-debug
-      o_wd_cnt<=x"0";
       o_readack_sync<='0';
       o_readack_sync2<='0';
       o_readack<='0';

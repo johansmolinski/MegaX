@@ -47,9 +47,11 @@ Rules:
   hung. Found with the hr-debug probe (megax-zf, megax-zg).
 - **hr-burst-cut** (2026-11-02; `vhdl/controllers/hyperram/hyperram_ctrl.vhd`): in
   WRITE_BURST_ST the controller had no waitrequest, so a read arriving while a write burst still
-  waited for words was accepted and lost. Now such a read is held (combinational waitrequest),
-  the write burst ends early (CS high, RECOVERY_ST) and the read follows; a 4-bit counter
-  counts the cuts. Why: megax-zh (with ascal-avl-reset) still lost every read after some
+  waited for words was accepted and lost. Now such a read is taken as in INIT_ST (`cut_read`),
+  the write burst ends early (CS high, RECOVERY_ST) and RECOVERY_ST starts the read; a 4-bit
+  counter counts the cuts since the configuration. (megax-zi held the read with a
+  combinational waitrequest instead: 20 resets fine, but a 73 ps timing failure on the path
+  QNICE FIFO - arbiter - controller - arbiter - ascal.) Why: megax-zh (with ascal-avl-reset) still lost every read after some
   resets (HDMI showed only vertical bars: the watchdog restarting ascal on stale lines), so
   something else still cuts write bursts short. Temporarily `count_short_o` bits 31..16 carry
   the state, the missing burst words and the cut counter for hr-debug.
