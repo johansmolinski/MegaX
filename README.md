@@ -25,7 +25,6 @@ Built, so far tested only in simulation or not yet at all:
 * D88 floppies with write-back, SxSI (.HDS) hard disk images, the SRAM
   image; the mounted images are remembered across power-off.
 
-
 Not done yet: mouse, joysticks, turbo, the OPM choice, MIDI, menu polish and
 release packaging. Known issues: some first loads end in the ROM debugger
 instead of the boot; the scaler shows noise for ~2 s at power-up.
