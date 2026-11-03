@@ -15,7 +15,7 @@ code; the list with the reasons is in Megamiga's `AGENTS.md`.
 `M2M/QNICE` is a git submodule: johansmolinski/QNICE-FPGA, branch
 `fat32-fastseek`, at **`78aeaac`**, the commit Megamiga `main` pins (fast
 FAT32 seek, extent maps, the FAT32 write layer), plus this core's exception
-fat32-fastmap on top (branch `megax-fastmap`, pinned to `6c0665f`, see below).
+fat32-fastmap on top (branch `megax-fastmap`, pinned to `724b470`, see below).
 
 Rules:
 
@@ -39,6 +39,14 @@ Rules:
   2 GB file with 4 KB clusters (`SPCS=8 BIG_BYTES=1981808640`). Why: mounting a 2 GB `.HDS`
   took about 16 s (half of it this map, half a seek to the end that MegaX now does through the
   map); with both, 4.5 s on the hardware (`megax-zn`).
+  Direct buffer reads (2026-11-03; also `QNICE/monitor/sysdef.asm` and `rom/sdcards.asm`): a
+  new device handle word `FAT32$DEV_DIRECT` (`FAT32$DEV_STRUCT_SIZE` 0x1B -> 0x1C), cleared by
+  `FAT32$MOUNT`, set by `FAT32$MOUNT_SD` and by the Shell's `SDC$MOUNT`. With it the fast path
+  calls the device's byte read once per run (it selects the card slot) and then reads the
+  entries through `IO$SD_DATA_POS`/`IO$SD_DATA` itself, about 28 instead of about 100
+  instructions per entry: the 2 GB `.HDS` mounts in about 2 s (`megax-zo`). The test suite
+  runs every case with and without direct reads; `J.BIN` (a chain that jumps 65536 clusters
+  ahead) kills the mutants without the high word check.
 - **ascal-16bpp** (2026-10-27; `vhdl/av_pipeline/digital_pipeline.vhd`,
   `vhdl/av_pipeline/av_pipeline.vhd`): a generic `G_ASCAL_16BPP` (default false
   = the framework's 24bpp) that stores the core's picture in HyperRAM as ascal's

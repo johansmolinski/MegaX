@@ -444,3 +444,13 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   Shell ROM 27928/32768 words.
 - **`megax-zn` (part B on top; WNS +0.078 ns): boots fine from the start-up mounts, the 2 GB HDS
   mounts from the menu in about 4.5 s.** Main pins QNICE `megax-fastmap` `6c0665f` again.
+- **Direct buffer reads** (QNICE `724b470`, `FAT32$DEV_DIRECT`; the Shell's `SDC$MOUNT` sets it,
+  M2M-UPSTREAM fat32-fastmap): the fast path reads the FAT entries through the SD controller's
+  cursor and data registers after one byte read call that selects the slot, about 28 instead of
+  about 100 instructions per entry. Emulator: every case with and without direct reads, the
+  2 GB case, a new `J.BIN` (chain jumping 65536 clusters ahead) for the high word checks;
+  mutants all killed except `flush_r9` (survives on `78aeaac` as well).
+  **`megax-zo` (WNS +0.078 ns): the 2 GB HDS mounts in about 2 s (16 s before part A), start-up
+  mounts and the boot after a reset fine.**
+- Next step for mounting speed, after 0.1 (the user: "the way to go", for Megamiga and
+  PC10-III too): the extent map built in the FPGA, `doc/plan.md` section 4 item 7.

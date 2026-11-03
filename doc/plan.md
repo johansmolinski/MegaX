@@ -174,3 +174,16 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
      SASI and SxSI. An SPC model is the largest new piece.
    - The X68030's own IPL ROM and CGROM from the SD card (rule 4: no Sharp ROMs in the
      repository), the other differences (memory map, SRAM, clocks) from the IPL's needs.
+7. **Extent maps built in the FPGA** (the user, 2026-11-03: "that seems like the way to go. It
+   would help Megamiga and PC10 too"). After 0.1. FAT32 keeps a file's clusters only as a
+   chain in the FAT, so every mount reads all of it (a 2 GB HDS with 4 KB clusters: 483,840
+   entries in 3,780 FAT sectors, 1.9 MB). In QNICE that is CPU bound (4.5 s with the fast path,
+   about 2 s expected with the direct buffer reads; the SD card itself needs well under 1 s).
+   A walker on the SD host's engine port reads the FAT sectors itself (CMD18 while the chain
+   stays in order, a new transfer where it jumps), compares each entry with "current + 1",
+   writes the extents into the map RAM and stops at the end of the chain, at the size, at a
+   bad entry or at the map's capacity; QNICE only starts it and reads the result. Expected:
+   0.2-0.3 s for 2 GB, also for the start-up mounts (the 4-image pack: about 7.5 GB).
+   Placement: a framework-level module next to `sdhost.vhd` (M2M-UPSTREAM in Megamiga's fork),
+   so that MegaX's `x68_sd`, Megamiga's `adf_sd`/HDF and PC10-III's `pc_fdd_sd` all use it;
+   a testbench against a FAT image with fragmented files, as `fat32_seek` does in QNICE.

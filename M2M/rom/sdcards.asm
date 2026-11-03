@@ -229,6 +229,13 @@ _SDCM_F         MOVE    R1, R5
                 MOVE    1, @R5                  ; DEV_PARTITION: partition 1
                 MOVE    R1, R8
                 RSUB    FAT32$MOUNT, 1          ; R9: 0 or the error
+                ; M2M-UPSTREAM fat32-fastmap (MegaX 2026-11-03): the buffer
+                ; of the slot's controller can be read directly once the
+                ; byte read function has selected the slot (the fast path
+                ; of FAT32$FILE_MAP)
+                MOVE    R1, R5
+                ADD     FAT32$DEV_DIRECT, R5
+                MOVE    1, @R5
                 MOVE    @R2, @R3                ; tried at this generation
                 MOVE    R9, @R6
                 CMP     0, R9
