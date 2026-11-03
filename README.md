@@ -6,36 +6,54 @@ A port of the [MiSTer Sharp X68000 core](https://github.com/MiSTer-devel/X68000_
 MiSTer2MEGA65 framework as modified by
 [Megamiga](https://github.com/johansmolinski/Megamiga).
 
-**Work in progress, no release yet.** MEGA65 R6 only. See `doc/plan.md` for
-the plan and `doc/history.md` for the details.
+**Version 0.1, the first release.** MEGA65 R6 only (an R3 port is planned,
+`doc/plan.md`). See `doc/history.md` for the details of every step.
 
-Status (2026-11-02)
--------------------
+Status (0.1, 2026-11-03)
+------------------------
 
 Tested on the hardware:
 
-* Human68k 3.02 boots from a DIM floppy image and from a SASI hard disk
-  image on the SD card; the main RAM passes a memory test.
-* The keyboard in MiSTer's layout (the core's help page lists the keys):
-  typing at Human68k's prompt.
-* HDMI and VGA output; the X68000's four video oscillators: the 15, 24 and
-  31 kHz modes, 640x480 and 1024x848 interlaced all show.
+* Human68k 3.02 boots from a DIM floppy image, a SASI hard disk image and
+  SxSI hard disk images; games run (TwinBee, Dracula, Super Street
+  Fighter II among others).
+* Floppies: XDF/DIM/HDM images in two drives.
+* Hard disks: one SASI image (`.HDF`) and up to four SxSI images (`.HDS`,
+  tested up to 2 GB each; a 2 GB image mounts in about 2 s). The X68000 is
+  held in reset until every remembered image is mounted, and is reset when
+  the menu closes after a hard disk image was mounted or ejected (its drivers
+  look for the drives only at boot).
+* The mounted images and the menu settings are remembered across power-off
+  (`/megax/megaxcfg`, created by the core on the first start).
+* The keyboard in MiSTer's layout (the core's help page lists the keys).
+* An Amiga mouse in port 1, an Atari-style joystick in port 2 (or two
+  joysticks: menu "Mouse in port 1" off). The second buttons (right mouse
+  button, joystick button B) need an active adapter on pin 9, a passive
+  second button is not seen.
+* HDMI (720p 60 or 50 Hz) and VGA; the X68000's four video oscillators: the
+  15, 24 and 31 kHz modes, 640x480 and 1024x848 interlaced.
+* Sound: the YM2151 (OPM) and the ADPCM.
+* The 68000 at 10 or 20 MHz (menu).
 
-Built, so far tested only in simulation or not yet at all:
+Built, but not yet tested on the hardware: D88 images (with the changes
+saved back on request), loading and saving the SRAM image.
 
-* D88 floppies with write-back, SxSI (.HDS) hard disk images, the SRAM
-  image; the mounted images are remembered across power-off.
-
-Not done yet: mouse, joysticks, turbo, the OPM choice, MIDI, menu polish and
-release packaging. Known issues: some first loads end in the ROM debugger
-instead of the boot; the scaler shows noise for ~2 s at power-up.
+Not in 0.1: MIDI, the "Visible Memory" option (the core has 12 MB), a
+keyboard fallback for the second fire buttons. Known issue: early builds
+sometimes started in the ROM debugger instead of booting (not seen lately).
 
 Getting started
 ---------------
 
-Put MiSTer's `boot.rom` (1 MB: Sharp's IPL and CGROM, not part of MegaX) in
-`/megax` on the SD card, together with the disk images. The core loads it at
-start-up; the menu (HELP key) mounts the images.
+1. Install the core: copy `MegaX-0.1-R6.cor` to the SD card and flash it into
+   a core slot (hold No Scroll while switching the MEGA65 on), or load
+   `MegaX-0.1-R6.bit` through JTAG.
+2. Make a folder `/megax` on the SD card and put MiSTer's `boot.rom` in it
+   (1 MB: Sharp's IPL and CGROM, not part of MegaX), together with your disk
+   images.
+3. Start the core. The menu (HELP key) mounts the images; SPACE on a disk
+   line ejects it. The settings file `/megax/megaxcfg` is created on the
+   first start and remembers the images and the settings.
 
 Licence
 -------

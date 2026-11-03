@@ -510,3 +510,13 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   pipeline at a VS, at most a frame's glitch.
 - **`megax-zr` (WNS +0.078 ns, 35 LUTs fewer, block RAM unchanged at 327.5): cold start with
   the 4-image pack, about ten resets (key and menu) and games: HDMI back every time.**
+
+## 2026-11-03 - Release 0.1 packaged
+
+- `MegaX-0.1-R6.bit` = `megax-zr`; `MegaX-0.1-R6.cor` by `coretool -B ... --target mega65r6
+  --bit-name "MegaX X68000" --bit-version 0.1` (verify OK; Megamiga's `make_release.py` naming).
+  No settings file in the release: the Shell creates `/megax/megaxcfg` (cfg-create).
+- README: status for 0.1, getting started. D88 write-back and the SRAM load/save listed as
+  built but not yet tested on the hardware. The user: no noise at power-up any more, the
+  sound (OPM, ADPCM) sounds right.
+- **The `.cor` flashed to slot 3 boots fine** (the first start from flash; JTAG before).
