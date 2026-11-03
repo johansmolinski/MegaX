@@ -32,13 +32,85 @@ _CFGL_L         CMP     CFGS_MAXC, R1           ; full: ignore the rest
                 SYSCALL(f32_fread, 1)           ; R9: byte, R10: error/EOF
                 CMP     0, R10
                 RBRA    _CFGL_E, !Z
-                MOVE    R9, @R0++
+                ; M2M-UPSTREAM cfg-strings (MegaX 2026-11-03): bytes 0x00 and
+                ; 0x01 before the text are the menu bytes of a file from a
+                ; LONGER menu (another layout): skip them, so that the text
+                ; and its signature are read as written. (A 0x00 used to end
+                ; the text at once: no signature, the defaults, a new
+                ; signature appended behind the old one, and the longer menu
+                ; then found its own old signature first and took the bytes of
+                ; the shorter layout: a FATAL in OPTM_CB_SHOW.)
+                CMP     0, R1
+                RBRA    _CFGL_ST, !Z
+                MOVE    R9, R2
+                AND     0xFFFE, R2
+                RBRA    _CFGL_L, Z
+_CFGL_ST        MOVE    R9, @R0++
                 ADD     1, R1
                 RBRA    _CFGL_L, 1
 _CFGL_E         MOVE    0, @R0
                 MOVE    CFGS_LEN, R0
                 MOVE    R1, @R0
                 SYSCALL(leave, 1)
+                RET
+
+; ----------------------------------------------------------------------------
+; CFGS_GRPCHK (M2M-UPSTREAM cfg-strings, MegaX 2026-11-03): C=1 if the menu
+; bits in M2M$CFM_DATA select exactly one item of every radio group (the
+; config.vhd groups 1..254 without flags), C=0 if not: the settings file was
+; written for another menu layout, use the defaults (the menu would stop with
+; a FATAL otherwise). Registers preserved; changes the RAMROM selection and
+; M2M$CFM_ADDR.
+; ----------------------------------------------------------------------------
+
+CFGS_GRPCHK     SYSCALL(enter, 1)
+                MOVE    M2M$RAMROM_DEV, R0
+                MOVE    M2M$CONFIG, @R0
+                MOVE    M2M$RAMROM_4KWIN, R0
+                MOVE    M2M$CFG_OPTM_GROUPS, @R0
+                MOVE    OPTM_ICOUNT, R7
+                MOVE    @R7, R7                 ; R7: number of items
+                XOR     R1, R1                  ; R1: item i
+_CFGC_I         CMP     R7, R1
+                RBRA    _CFGC_OK, Z
+                MOVE    M2M$RAMROM_DATA, R2
+                ADD     R1, R2
+                MOVE    @R2, R2                 ; R2: group of item i
+                MOVE    R2, R8
+                MOVE    1, R9
+                MOVE    255, R10
+                SYSCALL(in_range_u, 1)          ; a radio group?
+                RBRA    _CFGC_NI, !C            ; no
+                XOR     R3, R3                  ; R3: its selected items
+                XOR     R4, R4                  ; R4: item j
+_CFGC_J         MOVE    M2M$RAMROM_DATA, R5
+                ADD     R4, R5
+                CMP     @R5, R2                 ; in the same group?
+                RBRA    _CFGC_NJ, !Z
+                MOVE    R4, R5                  ; its bit: window j / 16,
+                SHR     4, R5                   ; bit j % 16
+                AND     0x000F, R5
+                MOVE    M2M$CFM_ADDR, R6
+                MOVE    R5, @R6
+                MOVE    M2M$CFM_DATA, R6
+                MOVE    @R6, R6
+                MOVE    R4, R5
+                AND     0x000F, R5
+                SHR     R5, R6
+                AND     0x0001, R6
+                ADD     R6, R3
+_CFGC_NJ        ADD     1, R4
+                CMP     R7, R4
+                RBRA    _CFGC_J, !Z
+                CMP     1, R3                   ; exactly one?
+                RBRA    _CFGC_NO, !Z
+_CFGC_NI        ADD     1, R1
+                RBRA    _CFGC_I, 1
+_CFGC_OK        SYSCALL(leave, 1)
+                OR      0x0004, SR              ; C=1
+                RET
+_CFGC_NO        SYSCALL(leave, 1)
+                AND     0xFFFB, SR              ; C=0
                 RET
 
 ; ----------------------------------------------------------------------------

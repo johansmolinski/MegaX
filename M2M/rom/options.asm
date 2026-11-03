@@ -565,6 +565,8 @@ _HLP_CA_14      SUB     1, R3                   ; done reading config file?
                 RBRA    _HLP_CA_9, !Z
 
 _HLP_CA_15      RSUB    CFGS_LOAD, 1            ; M2M-UPSTREAM cfg-strings
+                RSUB    CFGS_GRPCHK, 1          ; (MegaX 2026-11-03) one item
+                RBRA    _HLP_CA_NEW, !C         ; per radio group? no: reset
                 RSUB    CFG_SIGCHECK, 1         ; made for this menu? no: it
                 RBRA    _HLP_CA_NEW, !C         ; was reset to a new file
                 RBRA    _HLP_S3, 1              ; Case (a) successful

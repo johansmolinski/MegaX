@@ -47,6 +47,18 @@ Rules:
   instructions per entry: the 2 GB `.HDS` mounts in about 2 s (`megax-zo`). The test suite
   runs every case with and without direct reads; `J.BIN` (a chain that jumps 65536 clusters
   ahead) kills the mutants without the high word check.
+- **cfg-strings, layout fallback** (2026-11-03; `rom/cfgstr.asm`, `rom/options.asm`; Megamiga's
+  cfg-strings code, the fix belongs there too): a settings file written for another menu layout
+  stopped the core with "config.vhd: No selected menu group item found within submenu" (seen
+  on 2026-11-02 after a detour to an older build). Chain: a build with a SHORTER menu read the
+  longer menu's file, took its extra menu bytes (0x00/0x01) as the start of the text, a 0x00
+  ended the text at once, so no signature: the defaults, a new signature appended behind the
+  old one, saved. The longer menu then read its own old signature first, accepted the bytes
+  of the shorter layout, and a radio group ended up with no item selected. Now `CFGS_LOAD`
+  skips 0x00/0x01 bytes before the text (the text is printable), and the new `CFGS_GRPCHK`
+  checks, before the signature, that every radio group (groups 1..254 without flags) has
+  exactly one item selected; if not, the Shell takes the defaults as for a file of another
+  signature (keeping the text: the remembered images stay).
 - **ascal-16bpp** (2026-10-27; `vhdl/av_pipeline/digital_pipeline.vhd`,
   `vhdl/av_pipeline/av_pipeline.vhd`): a generic `G_ASCAL_16BPP` (default false
   = the framework's 24bpp) that stores the core's picture in HyperRAM as ascal's

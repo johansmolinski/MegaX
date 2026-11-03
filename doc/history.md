@@ -424,7 +424,8 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - `megax-zl` (incremental from megax-zk): timing met, but write_bitstream failed ("Site type
   pointers for element PAD and routed site do not match", 8 IOBs: pins unused in the
   reference); `megax-zl2` (not incremental): OK, WNS +0.078 ns. **Hardware: the mouse works.**
-  Joystick not yet tested (the SMS pad is missing).
+  Joystick not yet tested (the SMS pad is missing). 2026-11-03: **a TAC-2 (one button) works**;
+  Dracula's whip is on the second button, which a one-button stick does not have.
 
 ## 2026-11-02 - Faster mounts, second try
 
@@ -454,3 +455,24 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   mounts and the boot after a reset fine.**
 - Next step for mounting speed, after 0.1 (the user: "the way to go", for Megamiga and
   PC10-III too): the extent map built in the FPGA, `doc/plan.md` section 4 item 7.
+
+## 2026-11-03 - Settings file of another menu layout
+
+- The FATAL of 2026-11-02 ("config.vhd: No selected menu group item found within submenu",
+  0x0016, after a detour to `megax-u`): `megax-u` (33 lines) read the 35-line file, took the
+  extra menu bytes as the start of the text, a 0x00 ended the text, so no signature: the
+  defaults, `menu=3` appended behind the old `menu=4`. The longer menu then found its old
+  signature first and took the shorter layout's bytes; the HDMI submenu had no item selected.
+- Fix (M2M-UPSTREAM cfg-strings, `doc/m2m-provenance.md`; Megamiga has the same code):
+  `CFGS_LOAD` skips 0x00/0x01 before the text, and the new `CFGS_GRPCHK` requires exactly one
+  selected item per radio group before the signature check; otherwise the defaults, keeping the
+  text (the remembered images). A wrong file can now give wrong options, but no FATAL.
+- **`megax-zp` (WNS +0.078 ns) on hardware, the incident replayed: `megax-zp` saved its file,
+  `megax-u` rewrote it in its layout, `megax-zp` again: no FATAL, the defaults, all four SxSI
+  drives of the pack present after the fresh start.**
+- Earlier the same day the pack once came up with SxSI 2-4 missing after a JTAG load in the
+  middle of a game (the load was mine, the user was playing); not seen again. To watch: after a
+  reset the core announces all mounted drives at once on one shared image-size bus (X68000.sv's
+  logic, kept in x68_system), so diskemu could take one drive's size for all.
+- The user: a reset after mounting an SxSI image would help (the SxSI driver looks for its
+  drives only at boot).
