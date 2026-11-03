@@ -91,8 +91,6 @@ entity digital_pipeline is
       -- M2M-UPSTREAM screen-center (AExp 2026-07-08): ascal's interlace-detected
       -- flag (core-agnostic; from ascal i_inter), exposed to QNICE via SYS_CORE
       video_interlaced_o       : out std_logic;
-      -- M2M-UPSTREAM hr-debug (MegaX 2026-11-02, temporary): ascal's o_dbg
-      ascal_dbg_o              : out unsigned(15 downto 0);
 
       -- QNICE connection to ascal's mode register
       qnice_ascal_mode_i       : in  unsigned(4 downto 0);
@@ -525,7 +523,6 @@ begin
          i_hdmax           => sig_ihdmax,                   -- output
          i_vdmax           => sig_ivdmax,                   -- output
          i_interlaced      => sig_iinter,                   -- output -- M2M-UPSTREAM screen-center
-         o_dbg             => ascal_dbg_o,                  -- output -- M2M-UPSTREAM hr-debug
 
          -- Output video parameters
          run               => '1',                          -- input

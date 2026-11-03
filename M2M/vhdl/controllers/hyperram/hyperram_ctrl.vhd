@@ -90,11 +90,10 @@ architecture synthesis of hyperram_ctrl is
    signal   count_long  : unsigned(31 downto 0);
    signal   count_short : unsigned(31 downto 0);
 
-   -- M2M-UPSTREAM hr-burst-cut (MegaX 2026-11-02): avm_waitrequest_o as a signal, a read
-   -- taken during a write burst (cut_read) and the cuts since the configuration (hr-debug)
+   -- M2M-UPSTREAM hr-burst-cut (MegaX 2026-11-02): avm_waitrequest_o as a signal and a read
+   -- taken during a write burst (cut_read)
    signal   waitreq_r   : std_logic;
    signal   cut_read    : std_logic := '0';
-   signal   cut_count   : unsigned(3 downto 0) := (others => '0');
 
 begin
 
@@ -227,7 +226,6 @@ begin
                   hb_rwds_oe_o      <= '0';
                   waitreq_r         <= '1';
                   recovery_count    <= 2;
-                  cut_count         <= cut_count + 1;
                   state             <= RECOVERY_ST;
                elsif avm_write_i = '1' or state = WRITE_ST then
                   hb_ck_ddr_o <= "10";
@@ -295,12 +293,7 @@ begin
    -- Statistics
    count_long_o        <= count_long;
    avm_waitrequest_o   <= waitreq_r;  -- M2M-UPSTREAM hr-burst-cut
-
-   -- M2M-UPSTREAM hr-debug (temporary): bits 31..16 of count_short are the state (31..28),
-   -- the write burst words still missing (27..20) and the cut counter (19..16)
-   count_short_o       <= to_unsigned(state_type'pos(state), 4) &
-                          to_unsigned(write_clk_count, 8) & cut_count &
-                          count_short(15 downto 0);
+   count_short_o       <= count_short;
 
 end architecture synthesis;
 

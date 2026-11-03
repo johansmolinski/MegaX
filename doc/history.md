@@ -496,3 +496,17 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   Mounting and ejecting SxSI images from the menu (several times): the X68000 reboots when the
   menu closes, and the drive appears or is gone.
   A reset (key and menu) keeps all four drives, the 1 GB one included.
+  Opening and closing the menu without a mount does not reset.
+
+## 2026-11-03 - The hr-debug probe removed
+
+- Out (M2M-UPSTREAM hr-debug, 2026-11-02): the framework's `hr_dbg_o` and its wiring through
+  `top_mega65-r6.vhd` and `mega65.vhd`, `x68_trace` registers 0x0C-0x0F, ascal's `o_dbg` and
+  watchdog counter, the controller's burst-cut counter in `count_short_o`, the false path in
+  `CORE.xdc`, the HyperRAM part of `trace.py --status`.
+- Kept: hr-burst-cut, ascal-avl-reset and the read watchdog, now its own tag
+  `ascal-read-watchdog` (`doc/m2m-provenance.md`). Why the watchdog fired 15 times on
+  `megax-zj` stays open (no reading taken before the probe went); it restarts ascal's read
+  pipeline at a VS, at most a frame's glitch.
+- **`megax-zr` (WNS +0.078 ns, 35 LUTs fewer, block RAM unchanged at 327.5): cold start with
+  the 4-image pack, about ten resets (key and menu) and games: HDMI back every time.**

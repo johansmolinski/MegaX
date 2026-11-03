@@ -12,8 +12,7 @@ frozen for the read-out and unfrozen afterwards (--keep: stays frozen). --writes
 --arm: the trigger on a program fetch at <addr> (hex, mask default FFFFFF); the trace then
 freezes itself 64 cycles after it; --reset resets the X68000 afterwards (M2M CSR bit 0, about
 a millisecond), so the trigger catches the next boot. --status: control, fired, counters, and
-the OPM bus wait probe (X68K_top's dbg_opm) decoded, with the opm_ce(0) pulse counter read twice;
-the HyperRAM probe and ascal's read pipeline with its watchdog counter (M2M-UPSTREAM hr-debug).
+the OPM bus wait probe (X68K_top's dbg_opm) decoded, with the opm_ce(0) pulse counter read twice.
 """
 import os, re, subprocess, sys
 
@@ -44,7 +43,7 @@ if writes:
     print(qmon(["MCFFF40110", "MCFFF50000", "MC80000002"], qargs))
     sys.exit(0)
 if status:
-    out = qmon(["MCFFF40110", "MCFFF50000", "MD8000800F", "MD8000800F"], qargs)
+    out = qmon(["MCFFF40110", "MCFFF50000", "MD8000800B", "MD8000800B"], qargs)
     print(out)
     # the OPM bus wait probe (register 9, X68K_top's dbg_opm) and the opm_ce(0) pulse counter
     # (registers 10/11), from both dumps: the counter must move between them (4 MHz)
@@ -62,27 +61,6 @@ if status:
               " ".join("%s=%d" % (n, o >> (i + 2) & 1) for i, n in enumerate(names)))
         c0, c1 = (w[10] | w[11] << 16 for w in dumps)
         print("opm_ce(0) pulses: %d, then %d (%s)" % (c0, c1, "running" if c1 != c0 else "STOPPED"))
-    # the framework's HyperRAM debug word (registers 12..15, M2M-UPSTREAM hr-debug)
-    if len(dumps) == 2 and all(len(w) >= 16 for w in dumps):
-        h = dumps[1][12]
-        names = ["ctl_write", "ctl_read", "ctl_waitreq", "ctl_rdvalid",
-                 "scl_write", "scl_read", "scl_waitreq", "scl_rdvalid",
-                 "qn_write", "qn_read", "qn_waitreq", "qn_rdvalid", "hr_rst"]
-        print("hyperram %04X: " % h + " ".join("%s=%d" % (n, h >> i & 1) for i, n in enumerate(names)))
-        c = dumps[1][13]
-        print("controller: state=%s burst words missing=%d burst cuts=%d (then %d)" % (
-              ["INIT", "COMMAND_ADDRESS", "WAIT", "SAMPLE_RWDS", "LATENCY", "READ", "WRITE",
-               "WRITE_BURST", "RECOVERY"][c >> 12] if c >> 12 < 9 else "?",
-              c >> 4 & 0xFF, dumps[0][13] & 15, c & 15))
-        for k, (name, a, b) in enumerate([("read words", 14, 14)]):
-            print("%s: %d, then %d (%s)" % (name, dumps[0][a], dumps[1][a],
-                  "moving" if dumps[0][a] != dumps[1][a] else "STOPPED"))
-        # ascal's output read pipeline (M2M-UPSTREAM hr-debug, word 15) and its read watchdog
-        a = dumps[1][15]
-        print("ascal: o_state=%s o_copy=%s readlev=%d copylev=%d fload=%d avl_state=%s watchdog=%d (then %d)" % (
-              ["DISP", "HSYNC", "READ", "WAITREAD"][a & 3], ["WAIT", "SHIFT", "COPY", "?"][a >> 2 & 3],
-              a >> 4 & 3, a >> 6 & 3, a >> 8 & 3, ["IDLE", "WRITE", "READ", "?"][a >> 10 & 3],
-              dumps[0][15] >> 12, a >> 12))
     sys.exit(0)
 if arm:
     a, _, m = arm.partition("/")

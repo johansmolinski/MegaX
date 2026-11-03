@@ -85,18 +85,13 @@ Rules:
   combinational waitrequest instead: 20 resets fine, but a 73 ps timing failure on the path
   QNICE FIFO - arbiter - controller - arbiter - ascal.) Why: megax-zh (with ascal-avl-reset) still lost every read after some
   resets (HDMI showed only vertical bars: the watchdog restarting ascal on stale lines), so
-  something else still cuts write bursts short. Temporarily `count_short_o` bits 31..16 carry
-  the state, the missing burst words and the cut counter for hr-debug.
-- **hr-debug** (2026-11-02, temporary; `vhdl/framework.vhd`, `vhdl/top_mega65-r6.vhd`): a
-  64-bit debug word out of the framework (`hr_dbg_o`, hr_clk domain): the HyperRAM arbiter's
-  request/acknowledge lines towards the controller, the scaler and QNICE, `hr_rst`, counters of
-  accepted commands, delivered read words and QNICE's accepted commands, the burst count; shown
-  by `x68_trace.vhd` (registers 0x0C-0x0F, `tools/trace.py --status`). Why: about every other
-  reset HDMI stays black and every HyperRAM access hangs (QNICE's too); to see who waits for
-  whom. To be removed with the fix. Megax-zf showed the controller healthy: the scaler kept
-  writing 64-word bursts but never read again (256 read words since the load), on the first
-  load too. Since megax-zg also `vhdl/av_pipeline/ascal.vhd` (port `o_dbg`, a read watchdog
-  in Scalaire: a whole output frame without a readack, a readdataack or an idle read pipeline
-  restarts the pipeline at the VS), `digital_pipeline.vhd` and `av_pipeline.vhd` (`ascal_dbg_o`);
-  bits 63..48 of the word are now ascal's state and the watchdog counter. The watchdog may stay
-  as the fix (then as its own tag) if it proves to be one.
+  something else still cuts write bursts short. `megax-zj` cut 6 write bursts in 20+ resets,
+  none of them a black HDMI.
+- **ascal-read-watchdog** (2026-11-02; `vhdl/av_pipeline/ascal.vhd`): a read watchdog in
+  Scalaire: a whole output frame without a readack, a readdataack or an idle read pipeline
+  restarts the read pipeline at the VS (o_state, o_copy, readlev, copylev, fload). Why: while
+  the cut bursts (hr-burst-cut) still swallowed reads, READLEV/COPYLEV stayed locked and HDMI
+  black until the next reset; kept as a safety net (it fired 15 times in the 20+ resets of
+  `megax-zj`). It came with the temporary probe hr-debug (2026-11-02, the HyperRAM arbiter's
+  lines, ascal's read state and the watchdog and burst-cut counters in `x68_trace` 0x0C-0x0F),
+  which found the cause of the black HDMI and was removed again on 2026-11-03 (`megax-zr`).

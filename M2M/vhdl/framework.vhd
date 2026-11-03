@@ -220,11 +220,6 @@ port (
    hr_core_waitrequest_o   : out   std_logic;
    hr_high_o               : out   std_logic; -- Core is too fast
    hr_low_o                : out   std_logic; -- Core is too slow
-   -- M2M-UPSTREAM hr-debug (MegaX 2026-11-02, temporary): the HyperRAM arbiter's lines for the
-   -- core's debug device (hr_clk domain): 15..0 status bits, 31..16 commands the controller
-   -- accepted, 47..32 read words it delivered, 55..48 its burst count, 63..56 commands QNICE
-   -- got accepted
-   hr_dbg_o                : out   std_logic_vector(63 downto 0);
 
    -- QNICE control signals
    qnice_dvi_i             : in    std_logic;
@@ -318,10 +313,6 @@ signal sys_pps                : std_logic;               -- One pulse per second
 
 signal qnice_rst              : std_logic;
 signal hr_rst                 : std_logic;
-signal hr_dbg_cmd             : unsigned(15 downto 0) := (others => '0');  -- M2M-UPSTREAM hr-debug
-signal hr_dbg_rdv             : unsigned(15 downto 0) := (others => '0');
-signal hr_dbg_qn              : unsigned(7 downto 0)  := (others => '0');
-signal ascal_dbg              : unsigned(15 downto 0);  -- M2M-UPSTREAM hr-debug
 signal audio_rst              : std_logic;
 signal hdmi_rst               : std_logic;
 
@@ -756,32 +747,6 @@ begin
    -- HyperRAM clock domain: hr_clk
    --------------------------------------------------------
 
-   -- M2M-UPSTREAM hr-debug (MegaX 2026-11-02, temporary): see the port
-   p_hr_dbg : process (hr_clk)
-   begin
-      if rising_edge(hr_clk) then
-         if (hr_write = '1' or hr_read = '1') and hr_waitrequest = '0' then
-            hr_dbg_cmd <= hr_dbg_cmd + 1;
-         end if;
-         if hr_readdatavalid = '1' then
-            hr_dbg_rdv <= hr_dbg_rdv + 1;
-         end if;
-         if (hr_qnice_write = '1' or hr_qnice_read = '1') and hr_qnice_waitrequest = '0' then
-            hr_dbg_qn <= hr_dbg_qn + 1;
-         end if;
-         -- M2M-UPSTREAM hr-debug: 63..48 now ascal's read pipeline state
-         -- (was the QNICE command counter and the burst count)
-         hr_dbg_o <= std_logic_vector(ascal_dbg) &
-                     -- 31..16: the controller's state, missing burst words, cut counter
-                     -- (hyperram_ctrl count_short_o, M2M-UPSTREAM hr-burst-cut)
-                     std_logic_vector(hr_dbg_rdv) & std_logic_vector(hr_count_short(31 downto 16)) &
-                     "000" & hr_rst &
-                     hr_qnice_readdatavalid & hr_qnice_waitrequest & hr_qnice_read & hr_qnice_write &
-                     hr_dig_readdatavalid & hr_dig_waitrequest & hr_dig_read & hr_dig_write &
-                     hr_readdatavalid & hr_waitrequest & hr_read & hr_write;
-      end if;
-   end process p_hr_dbg;
-
    i_avm_arbit_general : entity work.avm_arbit_general
       generic map (
          G_NUM_SLAVES   => 3,
@@ -1075,7 +1040,6 @@ begin
          hr_readdata_i           => hr_dig_readdata,
          hr_readdatavalid_i      => hr_dig_readdatavalid,
          hr_waitrequest_i        => hr_dig_waitrequest,
-         ascal_dbg_o             => ascal_dbg,              -- M2M-UPSTREAM hr-debug
          hr_high_o               => hr_high_o,
          hr_low_o                => hr_low_o,
          -- Output to MEGA65 board

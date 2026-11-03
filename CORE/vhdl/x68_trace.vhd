@@ -17,8 +17,6 @@
 --             0x09 (R)   X68K_top's dbg_opm now (the OPM bus wait: opm_wstate, the iowait
 --                        sources, the resets, opm_csn, the strobes, opm_ce(0), AS)
 --             0x0A/0x0B  (R) opm_ce(0) pulses since the power-up (lo, hi; 4 MHz)
---             0x0C..0x0F (R) the framework's HyperRAM debug word (M2M-UPSTREAM hr-debug), bits
---                        15..0, 31..16, 47..32, 63..48 (two-flop synchronised, not coherent)
 --   Trigger: while armed, a program fetch (FC 2 or 6) whose address matches under the mask
 --   fires; 64 more cycles are recorded, then the trace freezes (control bit 0 stays as it was:
 --   write the control again to re-arm). So the ring holds the ~960 cycles before the match.
@@ -39,7 +37,6 @@ entity x68_trace is
       clk_sys_i      : in  std_logic;
       bus_i          : in  std_logic_vector(47 downto 0);   -- X68K_top's dbg_bus
       opm_i          : in  std_logic_vector(15 downto 0);   -- X68K_top's dbg_opm
-      hr_i           : in  std_logic_vector(63 downto 0);   -- framework's hr_dbg_o (hr_clk)
 
       qnice_clk_i    : in  std_logic;
       qnice_addr_i   : in  std_logic_vector(27 downto 0);
@@ -78,10 +75,6 @@ architecture synthesis of x68_trace is
    signal q_opm      : std_logic_vector(15 downto 0) := (others => '0');
    attribute ASYNC_REG of q_opm_1 : signal is "TRUE";
    attribute ASYNC_REG of q_opm   : signal is "TRUE";
-   signal q_hr_1     : std_logic_vector(63 downto 0) := (others => '0');
-   signal q_hr       : std_logic_vector(63 downto 0) := (others => '0');
-   attribute ASYNC_REG of q_hr_1  : signal is "TRUE";
-   attribute ASYNC_REG of q_hr    : signal is "TRUE";
 
    signal q_win      : std_logic_vector(15 downto 0);
    signal q_rdata    : std_logic_vector(47 downto 0);
@@ -146,8 +139,6 @@ begin
       if rising_edge(qnice_clk_i) then
          q_opm_1 <= opm;
          q_opm   <= q_opm_1;
-         q_hr_1  <= hr_i;
-         q_hr    <= q_hr_1;
       end if;
    end process p_qopm;
 
@@ -209,10 +200,6 @@ begin
                when x"009" => qnice_data_o <= q_opm;
                when x"00A" => qnice_data_o <= std_logic_vector(opm_ces(15 downto 0));
                when x"00B" => qnice_data_o <= std_logic_vector(opm_ces(31 downto 16));
-               when x"00C" => qnice_data_o <= q_hr(15 downto 0);
-               when x"00D" => qnice_data_o <= q_hr(31 downto 16);
-               when x"00E" => qnice_data_o <= q_hr(47 downto 32);
-               when x"00F" => qnice_data_o <= q_hr(63 downto 48);
                when others => null;
             end case;
          when x"0001" => qnice_data_o <= q_rdata(15 downto 0);
