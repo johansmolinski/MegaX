@@ -39,7 +39,9 @@
 ; Firmware: Main Code
 ; ----------------------------------------------------------------------------
 
-START_FIRMWARE  MOVE    X68_UNMNT_PREV, R0      ; the eject's state (HANDLE_CORE_IO)
+START_FIRMWARE  MOVE    X68_HD_RESET, R0        ; no hard disk reset pending
+                MOVE    0, @R0
+                MOVE    X68_UNMNT_PREV, R0      ; the eject's state (HANDLE_CORE_IO)
                 MOVE    0, @R0
                 MOVE    X68_SUB_ACTIVE, R0
                 MOVE    0, @R0
@@ -344,6 +346,8 @@ _FDSU_SHD       MOVE    2, R7                   ; base = DEV_CLUSTER - (2 << shi
                 OR      2, R6                   ; slot 1
 _FDSU_S0        MOVE    FD_MODE, R3             ; mode last: the mount
                 MOVE    R6, @R3
+                MOVE    R1, R8                  ; a hard disk (SASI, SxSI)? The
+                RSUB    FD_HDFLAG, 1            ; X68000 looks for them at boot
 
                 MOVE    R1, R8                  ; the handle to the end,
                 MOVE    FD_MAPWIN, R9           ; through the extent map (no
@@ -367,6 +371,19 @@ _FDSU_RET       MOVE    R7, R8
                 MOVE    @SP++, R11
                 MOVE    @SP++, R10
                 RET
+
+; FD_HDFLAG: slot R8 a hard disk (2 = SASI, 4..7 = SxSI 1..4)? Then the
+; X68000 is reset when the menu closes (X68_HD_RESET, HANDLE_CORE_IO): its
+; SASI/SxSI drivers look for their drives only at boot. Registers preserved.
+FD_HDFLAG       CMP     2, R8
+                RBRA    _FDHF_SET, Z
+                CMP     4, R8
+                RBRA    _FDHF_RET, N            ; 4 > slot: floppies, SRAM
+_FDHF_SET       MOVE    R8, @--SP
+                MOVE    X68_HD_RESET, R8
+                MOVE    1, @R8
+                MOVE    @SP++, R8
+_FDHF_RET       RET
 
 ; BROWSE_EXTRA (M2M-UPSTREAM cfg-strings): no browser entries that are no
 ; files. Output R8 = 0; R10..R12 preserved.
@@ -406,6 +423,11 @@ PREP_START      INCRB
                 CMP     0, @R2
                 RBRA    _X68PS_SIZE, !Z
 
+                MOVE    M2M$CSR, R2             ; the X68000 stays in reset from
+                OR      M2M$CSR_RESET, @R2      ; the end of the load until the
+                                                ; images are mounted again (the
+                                                ; Shell's START_CONNECT ends it),
+                                                ; so the IPL finds all its disks
                 MOVE    R1, R2                  ; end the load
                 ADD     X68_BOOT_END, R2
                 MOVE    1, @R2
@@ -423,7 +445,9 @@ _X68PS_W2       MOVE    @R2, R5
                 RBRA    _X68PS_RET, 1
 
 _X68PS_OK       RSUB    IMG_RESTORE, 1          ; the images as before the
-                XOR     R8, R8                  ; power-off (x68_img.asm)
+                MOVE    X68_HD_RESET, R8        ; power-off (x68_img.asm), while
+                MOVE    0, @R8                  ; in reset: no reset afterwards
+                XOR     R8, R8
                 XOR     R9, R9
                 RBRA    _X68PS_RET, 1
 
@@ -539,7 +563,7 @@ HANDLE_CORE_IO  RSUB    IMG_PEND_APPLY, 1       ; restored images' names
                 MOVE    M2M$CSR, R0             ; the menu open?
                 MOVE    @R0, R0
                 AND     M2M$CSR_OSM, R0
-                RBRA    _HCIO_RET_NS, Z
+                RBRA    _HCIO_CLOSED, Z
                 MOVE    X68_SUB_ACTIVE, R0      ; no browser/help page?
                 CMP     0, @R0
                 RBRA    _HCIO_RET_NS, !Z
@@ -589,11 +613,27 @@ _HCIO_F         MOVE    @R1++, R2
                 MOVE    1, R8                   ; ..and the settings forget it
                 MOVE    R1, R9
                 RSUB    IMG_SAVE, 1
+                MOVE    R2, R8                  ; a hard disk: reset at the close
+                RSUB    FD_HDFLAG, 1
 
 _HCIO_RET       MOVE    M2M$RAMROM_DEV, R0
                 MOVE    R6, @R0
                 MOVE    M2M$RAMROM_4KWIN, R0
                 MOVE    R7, @R0
+                RBRA    _HCIO_RET_NS, 1
+
+                ; the menu is closed: a hard disk was mounted or ejected? Then
+                ; reset the X68000 now (as "Reset the X68000" does)
+_HCIO_CLOSED    MOVE    X68_HD_RESET, R0
+                CMP     0, @R0
+                RBRA    _HCIO_RET_NS, Z
+                MOVE    0, @R0
+                MOVE    M2M$CSR, R0
+                OR      M2M$CSR_RESET, @R0
+                MOVE    0x2000, R1              ; about a millisecond
+_HCIO_RW        SUB     1, R1
+                RBRA    _HCIO_RW, !Z
+                AND     M2M$CSR_UN_RESET, @R0
 _HCIO_RET_NS    DECRB
                 MOVE    @SP++, R10
                 MOVE    @SP++, R9
@@ -785,6 +825,8 @@ BANK_IMG        .EQU    2                       ; the images across power-off
 
 X68_UNMNT_PREV  .BLOCK 1                        ; SPACE at the last HANDLE_CORE_IO
 X68_SUB_ACTIVE  .BLOCK 1                        ; 1: a browser/help page runs
+X68_HD_RESET    .BLOCK 1                        ; 1: a hard disk changed: reset the
+                                                ; X68000 when the menu is closed
 IMG_PEND        .BLOCK 1                        ; x68_img.asm: restored, no name yet
 IMG_KEY         .BLOCK 1                        ; the key IMG_SAVE writes
 IMG_PATH        .BLOCK 127                      ; a path ("SD1:/megax/a.xdf"),

@@ -476,3 +476,23 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   logic, kept in x68_system), so diskemu could take one drive's size for all.
 - The user: a reset after mounting an SxSI image would help (the SxSI driver looks for its
   drives only at boot).
+
+## 2026-11-03 - SxSI drives at start-up and after a mount
+
+- The user: all images must be mounted before the X68000 boots, and a mount from the menu needs
+  a reboot (the SxSI driver looks for its drives only at boot). Two causes of missing drives:
+  `PREP_START` ended the boot load (the 68000 starts) before `IMG_RESTORE`, so the IPL could
+  boot while SxSI 2-4 were still mounting; and after a reset x68_system announced all drives in
+  the same clock on one shared image-size bus, so diskemu could latch one drive's size for all.
+- Firmware (`CORE/m2m-rom/m2m-rom.asm`): `PREP_START` holds the X68000 in reset
+  (`M2M$CSR_RESET`) through `IMG_RESTORE`; `START_CONNECT` releases it. A mount or eject of
+  an SxSI/SASI image in the menu sets `X68_HD_RESET` (`FD_HDFLAG`: slot 2 = SASI, 4..7 = SxSI 1..4); when the
+  menu closes, `HANDLE_CORE_IO` pulses the reset once.
+- x68_system: every mount keeps its size per slot (`slot_size`); after a reset the drives are
+  announced one at a time, 256 clocks apart, each with its own size on `ann_size` (the old
+  announce-all block stays as a comment).
+- **`megax-zq` (WNS +0.078 ns): a fresh start with the 4-image pack shows all four drives on the
+  first boot; the mounts are quick enough for 0.1.**
+  Mounting and ejecting SxSI images from the menu (several times): the X68000 reboots when the
+  menu closes, and the drive appears or is gone.
+  A reset (key and menu) keeps all four drives, the 1 GB one included.

@@ -190,6 +190,13 @@ architecture synthesis of x68_system is
    signal reset_delayed    : unsigned(15 downto 0) := (others => '0');
    signal core_reset       : std_logic;
    signal core_reset_d     : std_logic := '1';
+   -- the drives announced again after a reset one at a time, each with its own size
+   type size_t is array(0 to 7) of std_logic_vector(63 downto 0);
+   signal slot_size        : size_t := (others => (others => '0'));
+   signal ann_size         : std_logic_vector(63 downto 0) := (others => '0');
+   signal seq_on           : std_logic := '0';
+   signal seq_slot         : natural range 0 to 7 := 0;
+   signal seq_wait         : natural range 0 to 255 := 0;
 
 begin
 
@@ -270,6 +277,15 @@ begin
    -- its top 256 * 65536 clocks; after every reset the drives with an image are
    -- announced again (0xFFFF clocks, plus a one-clock post_reset_mount for the
    -- XDF emulator); an eject looks ejected for 65535 clocks.
+   -- MegaX 2026-11-03: X68000.sv announces all drives again at the same clock, with the one
+   -- img_size of hps_io (the image mounted last); diskemu takes every drive's capacity (and
+   -- enable) from it at the rising edge of its mount bit, so after a reset all hard disks had
+   -- the size of one image. And diskemu ignores mounts while it is in reset (its lmount is
+   -- held at 0), so the images the firmware mounts while it holds the X68000 in reset at
+   -- start-up count only through this announcement. Here every mount keeps its slot's size
+   -- (slot_size); after a reset all mount bits go low, and 256 clocks later (diskemu is out of
+   -- reset) the drives with an image are announced one at a time, 256 clocks apart, each
+   -- with its own size on mist_imgsize (ann_size).
    p_mount : process(clk_sys)
    begin
       if rising_edge(clk_sys) then
@@ -284,16 +300,42 @@ begin
             if img_mounted(x) = '1' then
                mount_count(x) <= x"FFFFFF";
                disk_present(x) <= '1' when img_size /= x"0000000000000000" else '0';
+               slot_size(x) <= img_size;
+               ann_size     <= img_size;
             end if;
          end loop;
 
-         if core_reset_d = '1' and core_reset = '0' then
-            for x in 0 to 7 loop
-               if disk_present(x) = '1' then
-                  mount_count(x) <= x"00FFFF";
+         -- if core_reset_d = '1' and core_reset = '0' then
+         --    for x in 0 to 7 loop
+         --       if disk_present(x) = '1' then
+         --          mount_count(x) <= x"00FFFF";
+         --       end if;
+         --    end loop;
+         --    post_reset_mount <= disk_present;
+         -- end if;
+         if core_reset = '1' then
+            seq_on <= '0';
+         elsif core_reset_d = '1' then             -- the reset ends: all quiet first
+            mount_count <= (others => (others => '0'));
+            seq_on   <= '1';
+            seq_slot <= 0;
+            seq_wait <= 255;
+         elsif seq_on = '1' then
+            if seq_wait /= 0 then
+               seq_wait <= seq_wait - 1;
+            else
+               if disk_present(seq_slot) = '1' then
+                  mount_count(seq_slot)      <= x"00FFFF";
+                  post_reset_mount(seq_slot) <= '1';
+                  ann_size                   <= slot_size(seq_slot);
                end if;
-            end loop;
-            post_reset_mount <= disk_present;
+               if seq_slot = 7 then
+                  seq_on <= '0';
+               else
+                  seq_slot <= seq_slot + 1;
+                  seq_wait <= 255;
+               end if;
+            end if;
          end if;
 
          for i in 0 to 1 loop
@@ -406,7 +448,7 @@ begin
       pfdwait          => "00",
       mist_mounted     => img_mounted_d or post_reset_mount,
       mist_readonly    => "0000000" & img_readonly,   -- X68000.sv: 1 bit into 8 (bit 0 only)
-      mist_imgsize     => img_size,
+      mist_imgsize     => ann_size,           -- MegaX: the size of the drive announced (p_mount)
       mist_lba         => sd_lba,
       mist_rd          => sd_rd,
       mist_wr          => sd_wr,
