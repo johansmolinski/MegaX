@@ -157,7 +157,8 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
    cachecont's SDRAM design. Megamiga dropped R3 for the same reason (0.2.0).
    R3 would need a HyperRAM backend for main RAM, ROM and GVRAM, a feasibility
    measurement first (memory traffic per line against HyperRAM latency under
-   ascal load), and R3's top adapted for the SD sector service.
+   ascal load), and R3's top adapted for the SD sector service. Since 2026-11-03
+   planned after 0.1 (item 8).
 5. **Stock 1, 2 and 4 MB machines** need no smaller physical RAM: MiSTer's
    "Visible Memory" option (`X68000.sv` `P3O[74:71]`: Auto, 1-12 MB, the
    `vis_mem` byte in SRAM at $ED0008) sets what the software sees. Not yet in
@@ -187,3 +188,29 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
    Placement: a framework-level module next to `sdhost.vhd` (M2M-UPSTREAM in Megamiga's fork),
    so that MegaX's `x68_sd`, Megamiga's `adf_sd`/HDF and PC10-III's `pc_fdd_sd` all use it;
    a testbench against a FAT image with fragmented files, as `fat32_seek` does in QNICE.
+8. **An R3 port** (the user, 2026-11-03: add it to the plan; an R3 board is on its way). After
+   0.1. R3 is R6 without the SDRAM: the block RAM is full (`megax-zr`: 327.5 of 365 tiles, about
+   37 free), so everything in SDRAM goes into the 8 MB HyperRAM next to ascal's frame buffers:
+   main RAM (about 4 MB, the stock 1-4 MB machines through "Visible Memory", item 5), the IPL and
+   CGROM (1 MB), the upper GVRAM half (256 KB) and the D88/SASI caches.
+   - Megamiga's slimmed R3 core failed on exactly this: Chip RAM in HyperRAM, the latency was
+     too high (the Amiga's chip bus is shared slot by slot between the custom chips' DMA and
+     the CPU, every 280 ns, nothing can be cached). The X68000 core should be less picky: main
+     RAM is the 68000's and the DMAC's only, behind cachecont's read cache (16 blocks of 128
+     words) and write buffers, and the CPU waits for DTACK, so latency slows a miss but breaks
+     nothing; TVRAM, the lower GVRAM half, sprites, BG and palettes stay in block RAM. The one
+     hard deadline is the upper GVRAM half: cachecont reads each plane's line into the plane
+     caches once per line, a burst per line (about 32 us at 31 kHz) instead of a slot per bus
+     cycle. Graphics fast clear writes that half too.
+   - Step 1, measurement on R6 (a day or two): count cachecont's SDRAM traffic per line (GVRAM
+     line reads, CPU misses and write-backs, fast clear) in games and in 768x512 modes, and the
+     CPU read cache's hit rate; then HyperRAM's free time under ascal (16bpp, 720p and 1080p).
+     Go or no-go from these numbers.
+   - Step 2: an SDRAMC replacement under cachecont on its own port of the framework's HyperRAM
+     arbiter (clk_ram 80 MHz to hr_clk 100 MHz), with a guaranteed slot per line for the GVRAM
+     reads ahead of the CPU; ascal's bursts stay.
+   - Step 3: R3's top and constraints (M2M has them; Megamiga's copy is unused since its 0.2.0),
+     the SD sector service, a second project `CORE-R3.xpr`, AGENTS.md rule 6.
+   - Fallbacks if the GVRAM reads miss their deadline: the whole GVRAM in block RAM (64 more
+     tiles: repack the CACHEMEMN RAMs, about 17 back, and find the rest), or a smaller output
+     resolution so that ascal loads the HyperRAM less.

@@ -54,9 +54,9 @@ names).
    `doc/plan.md` section 4.1); "or later" was asked but not confirmed. No
    licence headers in our files unless the user asks for them.
 6. **Board: MEGA65 R6 only** (one `CORE/CORE-R6.xpr`; the user, 2026-11-02:
-   R4 and R5 are prototype boards, very few exist). R3 is out: not because of
-   the 12 MB, but because the ROM, the upper GVRAM half and the D88 cache need
-   SDRAM too and R3 has only the scaler's HyperRAM (`doc/plan.md` section 4.4).
+   R4 and R5 are prototype boards, very few exist). R3 (no SDRAM, only the
+   scaler's HyperRAM) is planned after 0.1, starting with a feasibility
+   measurement (`doc/plan.md` section 4 items 4 and 8; the user, 2026-11-03).
 7. **Hardware rules from Megamiga apply** (`~/git/pub/AExp/AGENTS.md`):
    .xpr SFType tokens only `VHDL2008`, `SVerilog` or none (anything else
    segfaults Vivado); video into the framework with active-high syncs and
