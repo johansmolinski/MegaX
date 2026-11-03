@@ -442,3 +442,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   CALL_DEV), which part B is meant to cut.
 - `megax-zn` = `megax-zm` + part B (QNICE `6c0665f`), to try part B alone on the hardware.
   Shell ROM 27928/32768 words.
+- **`megax-zn` (part B on top; WNS +0.078 ns): boots fine from the start-up mounts, the 2 GB HDS
+  mounts from the menu in about 4.5 s.** Main pins QNICE `megax-fastmap` `6c0665f` again.

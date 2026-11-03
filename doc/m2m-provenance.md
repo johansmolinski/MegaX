@@ -13,8 +13,9 @@ with two slots, ...). Each change carries an `M2M-UPSTREAM <name>` tag in the
 code; the list with the reasons is in Megamiga's `AGENTS.md`.
 
 `M2M/QNICE` is a git submodule: johansmolinski/QNICE-FPGA, branch
-`fat32-fastseek`, pinned to **`78aeaac`**, the commit Megamiga `main` pins
-(fast FAT32 seek, extent maps, the FAT32 write layer).
+`fat32-fastseek`, at **`78aeaac`**, the commit Megamiga `main` pins (fast
+FAT32 seek, extent maps, the FAT32 write layer), plus this core's exception
+fat32-fastmap on top (branch `megax-fastmap`, pinned to `6c0665f`, see below).
 
 Rules:
 
@@ -27,6 +28,17 @@ Rules:
 
 ## Framework exceptions of this core
 
+- **fat32-fastmap** (2026-11-02; `QNICE/monitor/fat32_library.asm`,
+  `QNICE/test_programs/fat32_seek/`; the submodule on the branch `megax-fastmap` of
+  johansmolinski/QNICE-FPGA, from `78aeaac`): a fast path in `FAT32$FILE_MAP_CB`. While the
+  FAT sector of the current cluster is the one in the buffer, `_F32_FM_RUN` follows its entries
+  in a tight loop as long as each is "current + 1", calling the device's byte read directly
+  instead of `READ_DW`/`READ_W`/`READ_B`/`CALL_DEV`; the first entry that does not continue the
+  extent (and every error) takes the unchanged general path, the progress hook still runs once
+  per 256 clusters. Three mutants of the fast path in the mutation tests; `fat32_seek` runs a
+  2 GB file with 4 KB clusters (`SPCS=8 BIG_BYTES=1981808640`). Why: mounting a 2 GB `.HDS`
+  took about 16 s (half of it this map, half a seek to the end that MegaX now does through the
+  map); with both, 4.5 s on the hardware (`megax-zn`).
 - **ascal-16bpp** (2026-10-27; `vhdl/av_pipeline/digital_pipeline.vhd`,
   `vhdl/av_pipeline/av_pipeline.vhd`): a generic `G_ASCAL_16BPP` (default false
   = the framework's 24bpp) that stores the core's picture in HyperRAM as ascal's
