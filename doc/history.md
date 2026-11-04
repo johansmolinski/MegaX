@@ -529,7 +529,7 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
     with SDRAMC's command lines (`dbg_o`, `dbg_mem`).
   - MegaX: `CORE/vhdl/x68_r3probe.vhd` counts the traffic per class on clk_ram and copies every
     command, with the same number of words, the same class and order, into the HyperRAM
-    (the framework's unused `hr_core` port, words 0x200000 up, above ascal's 3 MB; read data
+    (the framework's unused `hr_core` port, words 0x200000 up = the upper 4 MB, clear of ascal's 1 MB; read data
     thrown away). So the HyperRAM carries what an R3 core would put on it, next to ascal.
   - It also measures the copy's latency per class, and the time from each HCOMP to the end of
     that line's GVRAM reads. Readout through QNICE (`C_DEV_X68_DEBUG` window 4,

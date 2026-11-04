@@ -190,9 +190,19 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
    a testbench against a FAT image with fragmented files, as `fat32_seek` does in QNICE.
 8. **An R3 port** (the user, 2026-11-03: add it to the plan; an R3 board is on its way). After
    0.1. R3 is R6 without the SDRAM: the block RAM is full (`megax-zr`: 327.5 of 365 tiles, about
-   37 free), so everything in SDRAM goes into the 8 MB HyperRAM next to ascal's frame buffers:
-   main RAM (about 4 MB, the stock 1-4 MB machines through "Visible Memory", item 5), the IPL and
-   CGROM (1 MB), the upper GVRAM half (256 KB) and the D88/SASI caches.
+   37 free), so everything in SDRAM goes into the 8 MB HyperRAM next to ascal's frame buffer.
+   The budget (2026-11-04):
+   - ascal: 1 MB (RAMSIZE = 2^ceil(log2(768 x 512 x 2)) at 16bpp, `digital_pipeline.vhd`;
+     triple buffering is off, `mega65.vhd` `qnice_ascal_triplebuf_o`, so one buffer only;
+     triple buffering would need 3 MB).
+   - IPL and CGROM: 896 KB (128 KB + 768 KB). The upper GVRAM half: 256 KB.
+   - Main RAM: 4 MB, the largest stock machine (smaller ones through "Visible Memory", item 5).
+     Leaves about 1.9 MB.
+   - The D88 path (`diskemu`, only with D88 images; XDF/DIM/HDM go through the 512-byte
+     sector buffer, SASI/SxSI through the SD sector service): its FDE and FEC areas address
+     the SDRAM's upper 16 MB sparsely (drive, track, side, position in fixed fields,
+     `X68K_top.vhd` `fde_addr`, `fec_addrh`). On R3 it needs a compact layout in the 1.9 MB
+     left, or D88 for one drive, or main RAM down to 2 MB. To be sized in step 2.
    - Megamiga's slimmed R3 core failed on exactly this: Chip RAM in HyperRAM, the latency was
      too high (the Amiga's chip bus is shared slot by slot between the custom chips' DMA and
      the CPU, every 280 ns, nothing can be cached). The X68000 core should be less picky: main
@@ -217,6 +227,15 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
      reads ahead of the CPU; ascal's bursts stay.
    - Step 3: R3's top and constraints (M2M has them; Megamiga's copy is unused since its 0.2.0),
      the SD sector service, a second project `CORE-R3.xpr`, AGENTS.md rule 6.
-   - Fallbacks if the GVRAM reads miss their deadline: the whole GVRAM in block RAM (64 more
-     tiles: repack the CACHEMEMN RAMs, about 17 back, and find the rest), or a smaller output
-     resolution so that ascal loads the HyperRAM less.
+   - Fallbacks if the GVRAM reads miss their deadline:
+     1. The whole GVRAM in block RAM: 64 more tiles. 37 are free, repacking the CACHEMEMN
+        RAMs gives about 17 back, the backup SRAM (16 KB, CPU only, so latency is fine) into
+        HyperRAM 4 more: about 6 short.
+     2. The user's swap (2026-11-04): TVRAM (512 KB, 128 tiles) into HyperRAM, the whole GVRAM
+        in block RAM; about 64 tiles net freed. Upstream's `tvram_ddr.sv` (TVRAM in MiSTer's
+        DDR3) is the model. Costs: the deadline moves to TVRAM's line fetch (one block of all
+        four planes per line, about 256 HyperRAM words, on nearly every line: text is almost
+        always shown), and `tvram_ddr.sv` has no write buffer, so every CPU text write is a
+        read and a write in HyperRAM with the CPU waiting, and the raster copy (text scrolling)
+        becomes HyperRAM traffic too. HyperRAM: 512 KB instead of 256 KB.
+     3. A smaller output resolution, so that ascal loads the HyperRAM less.

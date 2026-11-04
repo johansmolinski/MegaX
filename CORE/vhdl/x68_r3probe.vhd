@@ -11,8 +11,8 @@
 --      stall;
 --   2. mirrors every SDRAM read and write command into the HyperRAM (hr_clk), through the
 --      framework's unused core port (the arbiter serves ascal first, then the core, then
---      QNICE), to words 0x200000.. (the upper 4 MB; ascal's three frame buffers are in the
---      lower 3 MB): the same class, the same number of words, in the same order. The latency
+--      QNICE), to words 0x200000.. (the upper 4 MB; ascal's frame buffer is the lowest 1 MB,
+--      triple buffering is off): the same class, the same number of words, in the same order. The latency
 --      of each mirrored command from its arrival (the SDRAM command's start plus the CDC, a few
 --      clocks) to its last word, the maximum per class; for the GVRAM line reads also from
 --      the HCOMP that started their line (the deadline is the next HCOMP: a line read that
