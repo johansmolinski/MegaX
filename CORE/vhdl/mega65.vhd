@@ -371,6 +371,8 @@ signal main_dbg_status        : std_logic_vector(5 downto 0);
 signal main_dbg_scan          : std_logic_vector(7 downto 0);
 signal main_dbg_bus           : std_logic_vector(47 downto 0);
 signal main_dbg_opm           : std_logic_vector(15 downto 0);
+signal main_dbg_mem           : std_logic_vector(51 downto 0);  -- R3 study (temporary)
+signal qnice_r3_data          : std_logic_vector(15 downto 0);  -- R3 study (temporary)
 signal qnice_dbg_data         : std_logic_vector(15 downto 0);
 signal qnice_dbg_ce           : std_logic;
 signal qnice_dbg_we           : std_logic;
@@ -432,12 +434,9 @@ begin
    -- Tie-offs: everything the X68000 does not use (values of the original M2M board tops)
    ---------------------------------------------------------------------------------------------
 
-   hr_core_write_o      <= '0';
-   hr_core_read_o       <= '0';
-   hr_core_address_o    <= (others => '0');
-   hr_core_writedata_o  <= (others => '0');
-   hr_core_byteenable_o <= (others => '0');
-   hr_core_burstcount_o <= (others => '0');
+   -- the core's HyperRAM port: x68_r3probe (the R3 study, temporary). Before:
+   -- hr_core_write_o <= '0'; hr_core_read_o <= '0'; address, writedata, byteenable and
+   -- burstcount (others => '0')
 
    -- M2M-UPSTREAM rtg-framebuffer: off (ascal shows the core's picture)
    fb_ena_o             <= '0';
@@ -693,6 +692,7 @@ begin
          dbg_scan_o           => main_dbg_scan,
          dbg_bus_o            => main_dbg_bus,
          dbg_opm_o            => main_dbg_opm,
+         dbg_mem_o            => main_dbg_mem,
 
          img_mounted_i        => main_img_mounted,
          img_readonly_i       => main_img_readonly,
@@ -784,6 +784,9 @@ begin
             qnice_dbg_ce     <= qnice_dev_ce_i;
             qnice_dbg_we     <= qnice_dev_we_i;
             qnice_dev_data_o <= qnice_dbg_data;
+            if qnice_dev_addr_i(27 downto 12) = x"0004" then   -- R3 study (temporary)
+               qnice_dev_data_o <= qnice_r3_data;
+            end if;
 
          -- the disk images: device 0x0101 + slot
          when C_DEV_X68_FDD0 | C_DEV_X68_FDD1 | C_DEV_X68_SASI | C_DEV_X68_SRAM |
@@ -831,6 +834,31 @@ begin
          qnice_ce_i           => qnice_dbg_ce,
          qnice_we_i           => qnice_dbg_we
       ); -- i_x68_trace
+
+   -- the R3 study (temporary, doc/plan.md section 4 item 8): the SDRAM traffic counted and
+   -- mirrored into the HyperRAM (x68_r3probe.vhd; QNICE device C_DEV_X68_DEBUG, window 4)
+   i_x68_r3probe : entity work.x68_r3probe
+      port map (
+         clk_ram_i            => clk_ram,
+         mem_i                => main_dbg_mem,
+         hr_clk_i             => hr_clk_i,
+         hr_rst_i             => hr_rst_i,
+         hr_write_o           => hr_core_write_o,
+         hr_read_o            => hr_core_read_o,
+         hr_address_o         => hr_core_address_o,
+         hr_writedata_o       => hr_core_writedata_o,
+         hr_byteenable_o      => hr_core_byteenable_o,
+         hr_burstcount_o      => hr_core_burstcount_o,
+         hr_readdata_i        => hr_core_readdata_i,
+         hr_readdatavalid_i   => hr_core_readdatavalid_i,
+         hr_waitrequest_i     => hr_core_waitrequest_i,
+         qnice_clk_i          => qnice_clk_i,
+         qnice_addr_i         => qnice_dev_addr_i,
+         qnice_data_i         => qnice_dev_data_i,
+         qnice_data_o         => qnice_r3_data,
+         qnice_ce_i           => qnice_dbg_ce,
+         qnice_we_i           => qnice_dbg_we
+      ); -- i_x68_r3probe
 
    i_x68_sd : entity work.x68_sd
       port map (

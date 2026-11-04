@@ -520,3 +520,58 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   built but not yet tested on the hardware. The user: no noise at power-up any more, the
   sound (OPM, ADPCM) sounds right.
 - **The `.cor` flashed to slot 3 boots fine** (the first start from flash; JTAG before).
+
+## 2026-11-04 - R3 study, step 1: the SDRAM traffic measured on R6
+
+- A temporary probe (`doc/plan.md` section 4 item 8, step 1), the provenance comment "MEGA65
+  port 2026-11-03 (temporary)" at every place:
+  - Fork: cachecont reports its state class (`dbg_class`); memcont and X68K_top bring it out
+    with SDRAMC's command lines (`dbg_o`, `dbg_mem`).
+  - MegaX: `CORE/vhdl/x68_r3probe.vhd` counts the traffic per class on clk_ram and copies every
+    command, with the same number of words, the same class and order, into the HyperRAM
+    (the framework's unused `hr_core` port, words 0x200000 up, above ascal's 3 MB; read data
+    thrown away). So the HyperRAM carries what an R3 core would put on it, next to ascal.
+  - It also measures the copy's latency per class, and the time from each HCOMP to the end of
+    that line's GVRAM reads. Readout through QNICE (`C_DEV_X68_DEBUG` window 4,
+    `tools/r3probe.py`, log in `~/megax-work/r3probe.log`).
+  - Tests: `tb/shell/run_r3probe.sh`: synthetic lines into a HyperRAM stand-in, 160 commands
+    and 25,920 words copied, nothing lost.
+- **`megax-r3a`** (WNS +0.002 ns; +1,600 LUTs, 328.5 tiles): the counters are 32 bits wide, so
+  a window must be shorter than 43 s (hr_clk). The first reading (2026-11-03, about 93 s) had
+  wrapped; the HyperRAM busy figure was unusable.
+- Readings (30 s windows, 2026-11-04):
+
+  | | LHES file manager (31 kHz, GVRAM shown) | Dracula in game (15 kHz) |
+  | --- | --- | --- |
+  | SDRAM busy (refresh not counted) | 16.4 % | 32.2 % |
+  | GVRAM line reads | 9.4 %; 2 x 256 words on 256 lines per frame | none |
+  | CPU read fills (128 words) | 5.6 %; 599 per frame | 29.8 %; 3,052 per frame |
+  | CPU write-backs | 1.5 %; 1,846 per frame, 2.4 words each | 2.4 %; 2,897 per frame, 1.3 words each |
+  | CPU reads hitting the cache | 98 % | 91 % |
+  | CPU waiting for SDRAM; longest wait | 7.2 %; 7.95 us | 11.9 %; 1.62 us |
+  | busiest line | 1,963 of 2,540 cycles | 3,167 of 5,007 cycles |
+  | HyperRAM busy (ascal + copy) | 36.4 % | 27.1 % |
+  | copy: longest latency | about 50 us, all classes | 9.1 us (fills) |
+  | copy: GVRAM reads, average / latest end after HCOMP | 5.4 us / 49.9 us (line 31.75 us) | - |
+  | copy: longest backlog, lost | 17, 0 | 5, 0 |
+
+  - The "refresh" class (62-77 %) is idle time: cachecont starts a refresh whenever it has
+    nothing else to do. HyperRAM refreshes itself, so it does not count for R3.
+  - HDMI snow (white pixels near text) in the file manager while the copy runs, none in
+    Dracula, VGA clean: the copy's traffic in a GVRAM mode disturbs ascal, although ascal has
+    the arbiter's priority. Likely its input side waiting behind the copy's 128-word bursts, as
+    with 24bpp (2026-10-27); not verified.
+  - Not measured: a 512-line GVRAM mode (GVRAM reads on every line, twice the file manager's)
+    and graphics fast clear. The user knows no software for these; Human68k and the file
+    manager are what is at hand.
+- Conclusions for R3:
+  - The bandwidth is there: even with the copy, HyperRAM is at most 36 % busy.
+  - The CPU side looks feasible: a fill is 128 words, about 1.3 us on either RAM; in HyperRAM
+    the waits are longer (queueing behind ascal), which slows a miss and breaks nothing. Only
+    the longest fill latency was measured, not the average.
+  - The GVRAM line reads are the problem, as expected: on average 5.4 us, but the worst case
+    ended 50 us after HCOMP, more than a line late. In an R3 core they need priority over the
+    CPU traffic, a guaranteed slot per line next to ascal's bursts or a prefetch further ahead
+    than one line (step 2 of the plan). The small write-backs (1-2 words, one HyperRAM command
+    each) are worth batching.
+  - The snow says ascal's share needs protecting too: shorter bursts for the core's port.

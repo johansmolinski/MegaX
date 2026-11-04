@@ -115,3 +115,7 @@ set_multicycle_path 2 -setup -end -from [get_clocks sdram_clk_pin] -to [get_cloc
 ## slots. Port names are the SPI ones of the board XDCs: mosi = CMD, miso = DAT0, reset = DAT3.
 set_property -dict {PULLUP TRUE} [get_ports {sd_mosi_o sd_miso_i sd_d1_i sd_d2_i sd_reset_o}]
 set_property -dict {PULLUP TRUE} [get_ports {sd2_mosi_o sd2_miso_i sd2_d1_i sd2_d2_i sd2_reset_o}]
+
+## R3 study (temporary, x68_r3probe.vhd): QNICE reads the snapshot registers (clk_ram, hr_clk)
+## only after the snapshot handshake, while they stand still.
+set_false_path -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_x68_r3probe/r_snap_reg* || NAME =~ CORE/i_x68_r3probe/h_snap_reg*)}]

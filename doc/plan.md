@@ -206,6 +206,12 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
      line reads, CPU misses and write-backs, fast clear) in games and in 768x512 modes, and the
      CPU read cache's hit rate; then HyperRAM's free time under ascal (16bpp, 720p and 1080p).
      Go or no-go from these numbers.
+     Done 2026-11-04 (`megax-r3a`, `doc/history.md`): the bandwidth is there (HyperRAM at most
+     36 % busy with the copy next to ascal), CPU misses look feasible, the GVRAM line reads are
+     5.4 us late on average but up to 50 us in the worst case (the line: 31.75 us), and the
+     copy's traffic gave HDMI snow in a GVRAM mode. So: go, if step 2 gives the GVRAM reads
+     their slot and keeps the core's bursts short enough for ascal. Not measured: a 512-line
+     GVRAM mode, fast clear, 1080p output.
    - Step 2: an SDRAMC replacement under cachecont on its own port of the framework's HyperRAM
      arbiter (clk_ram 80 MHz to hr_clk 100 MHz), with a guaranteed slot per line for the GVRAM
      reads ahead of the CPU; ascal's bursts stay.

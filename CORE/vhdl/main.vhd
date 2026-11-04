@@ -96,6 +96,7 @@ entity main is
       dbg_scan_o              : out   std_logic_vector(7 downto 0);
       dbg_bus_o               : out   std_logic_vector(47 downto 0);  -- x68_trace.vhd
       dbg_opm_o               : out   std_logic_vector(15 downto 0);  -- x68_trace.vhd
+      dbg_mem_o               : out   std_logic_vector(51 downto 0);  -- R3 study (temporary, x68_r3probe.vhd)
 
       -- Audio output (clk_sys, signed PCM)
       audio_left_o            : out   signed(15 downto 0);
@@ -334,6 +335,7 @@ begin
          dbg_status     => dbg_status_o(4 downto 0),
          dbg_bus        => dbg_bus_o,
          dbg_opm        => dbg_opm_o,
+         dbg_mem        => dbg_mem_o,
          fd_motor       => fd_motor_o,
          ps2_kbd_clk_i  => kbd_clk,
          ps2_kbd_dat_i  => kbd_dat,
