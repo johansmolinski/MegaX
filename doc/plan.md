@@ -201,8 +201,14 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
    - The D88 path (`diskemu`, only with D88 images; XDF/DIM/HDM go through the 512-byte
      sector buffer, SASI/SxSI through the SD sector service): its FDE and FEC areas address
      the SDRAM's upper 16 MB sparsely (drive, track, side, position in fixed fields,
-     `X68K_top.vhd` `fde_addr`, `fec_addrh`). On R3 it needs a compact layout in the 1.9 MB
-     left, or D88 for one drive, or main RAM down to 2 MB. To be sized in step 2.
+     `X68K_top.vhd` `fde_addr`, `fec_addrh`): at mount it builds every track of the image as
+     an MFM track in SDRAM, several MB for two drives. **R3 without D88 for now** (the user,
+     2026-11-04): D88 is a PC-88/PC-98 format; the X68000's own XDF/DIM/HDM (DIM including
+     2HDE and 2HS) and the SxSI disks need no external RAM; the loss is copy-protected dumps
+     that exist only as D88. R6 keeps D88. Later, if R3 users ask: D88 straight from the SD
+     card as Megamiga's `floppy-direct` (one cylinder built per step, about 40 KB per drive in
+     HyperRAM, the existing builder and scanner per track; a reformat that changes a track's
+     length in the file is the open point). With D88 out, about 1.9 MB of HyperRAM stays free.
    - Megamiga's slimmed R3 core failed on exactly this: Chip RAM in HyperRAM, the latency was
      too high (the Amiga's chip bus is shared slot by slot between the custom chips' DMA and
      the CPU, every 280 ns, nothing can be cached). The X68000 core should be less picky: main
@@ -224,7 +230,11 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
      GVRAM mode, fast clear, 1080p output.
    - Step 2: an SDRAMC replacement under cachecont on its own port of the framework's HyperRAM
      arbiter (clk_ram 80 MHz to hr_clk 100 MHz), with a guaranteed slot per line for the GVRAM
-     reads ahead of the CPU; ascal's bursts stay.
+     reads ahead of the CPU; ascal's bursts stay. Built and tested on the R6 first, as a build
+     variant with the SDRAM unused, before the R3 board is here. **First goal: a stable picture
+     on VGA and HDMI** (the user, 2026-11-04): no late GVRAM lines, no snow on HDMI, in the
+     file manager (the GVRAM mode measured in step 1), Human68k and games; speed and the rest
+     after that.
    - Step 3: R3's top and constraints (M2M has them; Megamiga's copy is unused since its 0.2.0),
      the SD sector service, a second project `CORE-R3.xpr`, AGENTS.md rule 6.
    - Fallbacks if the GVRAM reads miss their deadline:
