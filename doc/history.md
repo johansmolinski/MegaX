@@ -708,3 +708,18 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   controller) and `--hr-lat <min>,<span>`: with no gaps and fixed latencies of 8, 15, 30 and 60
   clocks the IPL goes on past the fill (12808..14774 bus cycles at 150 ms). Not reproduced.
 - `megax-hr8` OK, WNS +0.050 ns, 35 critical warnings (as before, none on the new false path).
+- `megax-hr8` on the R6 (21:02), `tools/hrstate.py` at the hang (both reads the same): x68_hrmem
+  idle with everything done (1382 reads, 1382 ended, none aborted or timed out, FIFOs empty,
+  the HyperRAM side idle); memcont: the CPU's read request up, no acknowledge, cachecont in
+  ST_IDLE. So cachecont never starts the fill; x68_hrmem is not the one waiting. The last read
+  was GVRAM 77ff (the GVRAM clear's last row): X68K_top's power-on clear runs again when the
+  Shell's reset ends (gvclr follows rstn), concurrently with the IPL (tb/sim: 143..156 ms), and on
+  the board it ran to the end while the CPU waited (1382 reads against ~600 in tb/sim at that
+  point). In ST_IDLE the fill starts when braddrnone and sb_rd (rambusy 0, brcache_busy is
+  always 0): with the request up, a read block must claim line 7f8f without the word.
+- Debug window 5 extended (fork, temporary): cachecont's state, brcache_sel, aborted, the
+  synchronised request and address, per read block the tag, cacheext's mask and rdb
+  (cacheext dbg_o, cachecont dbg2_o, memcont, X68K_top dbg_cache), words 64..127;
+  `tools/hrstate.py --raw` decodes tb/sim's dump (tb/sim prints it at the end). In tb/sim at
+  150 ms six reads were aborted during their words (SDRAMC also takes abort only in its data
+  phase). Build `megax-hr9`.

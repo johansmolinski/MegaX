@@ -133,4 +133,4 @@ set_max_delay -datapath_only 8.0 -from [get_clocks hr_clk] -to [get_cells -quiet
 
 ## R3 bring-up (temporary): x68_hrmem's state and memcont's command, sampled as they are into
 ## qnice_clk for the debug window 5 (mega65.vhd p_hrx; read while they stand still).
-set_false_path -to [get_cells -quiet -hierarchical -filter {NAME =~ *qnice_hrx*_reg*}]
+set_false_path -to [get_cells -quiet -hierarchical -filter {NAME =~ *qnice_hrx*_reg* || NAME =~ *qnice_cache*_reg*}]

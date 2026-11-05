@@ -376,6 +376,9 @@ signal main_dbg_hrx           : std_logic_vector(511 downto 0); -- R3 bring-up: 
 type t_hrx_words is array (0 to 31) of std_logic_vector(15 downto 0);
 signal qnice_hrx              : t_hrx_words;                    -- ... and memcont's command, in qnice_clk
 signal qnice_hrx_mem          : std_logic_vector(51 downto 0);
+signal main_dbg_cache         : std_logic_vector(1023 downto 0); -- R3 bring-up: cachecont's read blocks
+type t_cache_words is array (0 to 63) of std_logic_vector(15 downto 0);
+signal qnice_cache            : t_cache_words;
 signal main_dbg_hr_s          : std_logic_vector(12 downto 0);  -- ... in main_clk
 signal main_blink             : unsigned(24 downto 0) := (others => '0');
 signal main_drive_col_hr      : std_logic_vector(23 downto 0);
@@ -792,6 +795,7 @@ begin
          dbg_mem_o            => main_dbg_mem,
          dbg_hr_o             => main_dbg_hr,
          dbg_hrx_o            => main_dbg_hrx,
+         dbg_cache_o          => main_dbg_cache,
          hr_clk_i             => hr_clk_i,
          hr_rst_i             => hr_rst_i,
          hr_write_o           => main_hr_write,
@@ -880,6 +884,9 @@ begin
             qnice_hrx(i) <= main_dbg_hrx(16 * i + 15 downto 16 * i);
          end loop;
          qnice_hrx_mem <= main_dbg_mem;
+         for i in 0 to 63 loop
+            qnice_cache(i) <= main_dbg_cache(16 * i + 15 downto 16 * i);
+         end loop;
       end if;
    end process p_hrx;
 
@@ -910,10 +917,12 @@ begin
                qnice_dev_data_o <= qnice_r3_data;
             end if;
             -- R3 bring-up (temporary): window 5, words 0..31 x68_hrmem's state (dbgx_o), 32..35
-            -- memcont's current command (dbg_mem); sampled as they are (CORE.xdc: false path), read
-            -- them twice (tools/hrstate.py)
+            -- memcont's current command (dbg_mem), 64..127 cachecont's read blocks (dbg2_o);
+            -- sampled as they are (CORE.xdc: false path), read them twice (tools/hrstate.py)
             if qnice_dev_addr_i(27 downto 12) = x"0005" then
-               if qnice_dev_addr_i(5) = '0' then
+               if qnice_dev_addr_i(6) = '1' then
+                  qnice_dev_data_o <= qnice_cache(to_integer(unsigned(qnice_dev_addr_i(5 downto 0))));
+               elsif qnice_dev_addr_i(5) = '0' then
                   qnice_dev_data_o <= qnice_hrx(to_integer(unsigned(qnice_dev_addr_i(4 downto 0))));
                else
                   case qnice_dev_addr_i(1 downto 0) is

@@ -140,6 +140,7 @@ port (
                                                            -- x68_hrtest's result, 8 a loader byte waited
                                                            -- 26 ms (clk_sys), 7..0 x68_hrmem's flags
    dbg_hrx        : out   std_logic_vector(511 downto 0);  -- R3 bring-up: x68_hrmem's state (dbgx_o)
+   dbg_cache      : out   std_logic_vector(1023 downto 0); -- R3 bring-up: cachecont's read blocks
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -577,6 +578,7 @@ begin
       dbg_bus          => dbg_bus,
       dbg_opm          => dbg_opm,
       dbg_mem          => dbg_mem,
+      dbg_cache        => dbg_cache,
       xr_addrh_o       => xr_addrh,
       xr_bgn_o         => xr_bgn,
       xr_end_o         => xr_end,

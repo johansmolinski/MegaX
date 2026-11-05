@@ -102,6 +102,7 @@ entity main is
       dbg_mem_o               : out   std_logic_vector(51 downto 0);  -- R3 study (temporary, x68_r3probe.vhd)
       dbg_hr_o                : out   std_logic_vector(12 downto 0);   -- R3 bring-up flags (x68_system dbg_hr)
       dbg_hrx_o               : out   std_logic_vector(511 downto 0);  -- R3 bring-up: x68_hrmem's state
+      dbg_cache_o             : out   std_logic_vector(1023 downto 0); -- R3 bring-up: cachecont's read blocks
 
       -- the HyperRAM arbiter's core port (hr_clk), used with G_HRMEM
       hr_clk_i                : in    std_logic;
@@ -370,6 +371,7 @@ begin
          dbg_mem        => dbg_mem_o,
          dbg_hr         => dbg_hr_o,
          dbg_hrx        => dbg_hrx_o,
+         dbg_cache      => dbg_cache_o,
          fd_motor       => fd_motor_o,
          ps2_kbd_clk_i  => kbd_clk,
          ps2_kbd_dat_i  => kbd_dat,

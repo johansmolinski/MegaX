@@ -684,6 +684,18 @@ int main(int argc, char** argv) {
    // x68_system dbg_hr (HRMEM): 12..9 x68_hrtest (lanes, timeout, errors, done), 8 loader stuck,
    // 7..0 x68_hrmem's flags (mega65.vhd shows them on the LEDs)
    printf("bring-up flags %04x\n", (unsigned)top->dbg_hr);
+   // the debug window 5 as tools/hrstate.py reads it (words 0..31 x68_hrmem, 32..35 memcont's
+   // command, 64..127 cachecont's read blocks): decode with tools/hrstate.py --raw <log>
+   {
+      uint16_t w[128] = {0};
+      for (int i = 0; i < 32; i++) w[i] = (top->dbg_hrx[i / 2] >> (16 * (i % 2))) & 0xFFFF;
+      uint64_t m = top->dbg_mem;
+      for (int i = 0; i < 4; i++) w[32 + i] = (m >> (16 * i)) & 0xFFFF;
+      for (int i = 0; i < 64; i++) w[64 + i] = (top->dbg_cache[i / 2] >> (16 * (i % 2))) & 0xFFFF;
+      printf("window5:");
+      for (int i = 0; i < 128; i++) printf(" %04x", w[i]);
+      printf("\n");
+   }
    printf("[%8.3f ms] end, %ld frames\n", now / 1e12, frame_no);
    delete top;
    delete ctx;
