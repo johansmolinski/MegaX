@@ -619,4 +619,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   the burst length logic had 15 levels, and the TVRAM address fan-out routed 13.8 ns. Now the
   constraints name the synchronisers, the counts and the burst length are registered: **`megax-hr2`
   (non-incremental) OK, WNS +0.103 ns**, block RAM 327.5 tiles, crossings +2.5/+3.0 ns under
-  their 8 ns bound. `megax-hr3` adds the reset fix.
+  their 8 ns bound. **`megax-hr3` (the reset fix, incremental from hr2) OK, WNS +0.103 ns**: the
+  build for the first try on the R6 (not yet loaded; the user's go-ahead first).
