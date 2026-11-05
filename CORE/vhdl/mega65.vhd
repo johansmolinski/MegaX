@@ -372,6 +372,24 @@ signal main_dbg_scan          : std_logic_vector(7 downto 0);
 signal main_dbg_bus           : std_logic_vector(47 downto 0);
 signal main_dbg_opm           : std_logic_vector(15 downto 0);
 signal main_dbg_mem           : std_logic_vector(51 downto 0);  -- R3 study (temporary)
+
+-- the core's HyperRAM port: x68_hrmem in main (X68_HRMEM) or the R3 probe's mirror
+signal main_hr_write          : std_logic;
+signal main_hr_read           : std_logic;
+signal main_hr_address        : std_logic_vector(31 downto 0);
+signal main_hr_writedata      : std_logic_vector(15 downto 0);
+signal main_hr_byteenable     : std_logic_vector(1 downto 0);
+signal main_hr_burstcount     : std_logic_vector(7 downto 0);
+signal probe_hr_write         : std_logic;
+signal probe_hr_read          : std_logic;
+signal probe_hr_address       : std_logic_vector(31 downto 0);
+signal probe_hr_writedata     : std_logic_vector(15 downto 0);
+signal probe_hr_byteenable    : std_logic_vector(1 downto 0);
+signal probe_hr_burstcount    : std_logic_vector(7 downto 0);
+signal probe_hr_waitrequest   : std_logic;
+signal probe_hr_readdatavalid : std_logic;
+signal main_hr_waitrequest    : std_logic;
+signal main_hr_readdatavalid  : std_logic;
 signal qnice_r3_data          : std_logic_vector(15 downto 0);  -- R3 study (temporary)
 signal qnice_dbg_data         : std_logic_vector(15 downto 0);
 signal qnice_dbg_ce           : std_logic;
@@ -434,9 +452,20 @@ begin
    -- Tie-offs: everything the X68000 does not use (values of the original M2M board tops)
    ---------------------------------------------------------------------------------------------
 
-   -- the core's HyperRAM port: x68_r3probe (the R3 study, temporary). Before:
-   -- hr_core_write_o <= '0'; hr_core_read_o <= '0'; address, writedata, byteenable and
-   -- burstcount (others => '0')
+   -- the core's HyperRAM port: the core's memory with X68_HRMEM (x68_hrmem in x68_system),
+   -- otherwise x68_r3probe's mirror (the R3 study, temporary; before it: hr_core_write_o <= '0';
+   -- hr_core_read_o <= '0'; address, writedata, byteenable and burstcount (others => '0')).
+   -- The other one sees a port that never answers.
+   hr_core_write_o        <= main_hr_write      when X68_HRMEM else probe_hr_write;
+   hr_core_read_o         <= main_hr_read       when X68_HRMEM else probe_hr_read;
+   hr_core_address_o      <= main_hr_address    when X68_HRMEM else probe_hr_address;
+   hr_core_writedata_o    <= main_hr_writedata  when X68_HRMEM else probe_hr_writedata;
+   hr_core_byteenable_o   <= main_hr_byteenable when X68_HRMEM else probe_hr_byteenable;
+   hr_core_burstcount_o   <= main_hr_burstcount when X68_HRMEM else probe_hr_burstcount;
+   main_hr_waitrequest    <= hr_core_waitrequest_i   when X68_HRMEM else '1';
+   main_hr_readdatavalid  <= hr_core_readdatavalid_i when X68_HRMEM else '0';
+   probe_hr_waitrequest   <= '1' when X68_HRMEM else hr_core_waitrequest_i;
+   probe_hr_readdatavalid <= '0' when X68_HRMEM else hr_core_readdatavalid_i;
 
    -- M2M-UPSTREAM rtg-framebuffer: off (ascal shows the core's picture)
    fb_ena_o             <= '0';
@@ -655,6 +684,9 @@ begin
    end process p_sxsi;
 
    i_main : entity work.main
+      generic map (
+         G_HRMEM              => X68_HRMEM
+      )
       port map (
          clk_ram_i            => clk_ram,
          clk_sys_i            => main_clk,
@@ -693,6 +725,17 @@ begin
          dbg_bus_o            => main_dbg_bus,
          dbg_opm_o            => main_dbg_opm,
          dbg_mem_o            => main_dbg_mem,
+         hr_clk_i             => hr_clk_i,
+         hr_rst_i             => hr_rst_i,
+         hr_write_o           => main_hr_write,
+         hr_read_o            => main_hr_read,
+         hr_address_o         => main_hr_address,
+         hr_writedata_o       => main_hr_writedata,
+         hr_byteenable_o      => main_hr_byteenable,
+         hr_burstcount_o      => main_hr_burstcount,
+         hr_readdata_i        => hr_core_readdata_i,
+         hr_readdatavalid_i   => main_hr_readdatavalid,
+         hr_waitrequest_i     => main_hr_waitrequest,
 
          img_mounted_i        => main_img_mounted,
          img_readonly_i       => main_img_readonly,
@@ -843,15 +886,15 @@ begin
          mem_i                => main_dbg_mem,
          hr_clk_i             => hr_clk_i,
          hr_rst_i             => hr_rst_i,
-         hr_write_o           => hr_core_write_o,
-         hr_read_o            => hr_core_read_o,
-         hr_address_o         => hr_core_address_o,
-         hr_writedata_o       => hr_core_writedata_o,
-         hr_byteenable_o      => hr_core_byteenable_o,
-         hr_burstcount_o      => hr_core_burstcount_o,
+         hr_write_o           => probe_hr_write,
+         hr_read_o            => probe_hr_read,
+         hr_address_o         => probe_hr_address,
+         hr_writedata_o       => probe_hr_writedata,
+         hr_byteenable_o      => probe_hr_byteenable,
+         hr_burstcount_o      => probe_hr_burstcount,
          hr_readdata_i        => hr_core_readdata_i,
-         hr_readdatavalid_i   => hr_core_readdatavalid_i,
-         hr_waitrequest_i     => hr_core_waitrequest_i,
+         hr_readdatavalid_i   => probe_hr_readdatavalid,
+         hr_waitrequest_i     => probe_hr_waitrequest,
          qnice_clk_i          => qnice_clk_i,
          qnice_addr_i         => qnice_dev_addr_i,
          qnice_data_i         => qnice_dev_data_i,

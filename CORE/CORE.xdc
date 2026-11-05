@@ -119,3 +119,12 @@ set_property -dict {PULLUP TRUE} [get_ports {sd2_mosi_o sd2_miso_i sd2_d1_i sd2_
 ## R3 study (temporary, x68_r3probe.vhd): QNICE reads the snapshot registers (clk_ram, hr_clk)
 ## only after the snapshot handshake, while they stand still.
 set_false_path -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && (NAME =~ CORE/i_x68_r3probe/r_snap_reg* || NAME =~ CORE/i_x68_r3probe/h_snap_reg*)}]
+
+## R3 memory path (x68_hrmem.vhd, X68_HRMEM in globals.vhd): its three x68_afifo FIFOs cross
+## between clk_ram and hr_clk. The paths into the first synchroniser stages (named by their
+## destination: Vivado merges a Gray pointer's top bit with the binary pointer's register, megax-hr1)
+## and from the distributed RAM into the read side are the crossings: data path only, under the
+## faster clock's period. (Empty, with warnings, when X68_HRMEM is false.)
+set_max_delay -datapath_only 8.0 -from [get_clocks hr_clk] -to [get_cells -quiet -hierarchical -filter {NAME =~ *i_hrmem/i_*/afifo_*_s1_reg*}]
+set_max_delay -datapath_only 8.0 -from [get_clocks clk_ram] -to [get_cells -quiet -hierarchical -filter {NAME =~ *i_hrmem/i_*/afifo_*_s1_reg*}]
+set_max_delay -datapath_only 8.0 -from [get_cells -quiet -hierarchical -filter {NAME =~ *i_hrmem/i_*/ram_reg*}]

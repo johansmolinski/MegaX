@@ -70,6 +70,11 @@ constant VGA_DY               : natural := 512;
 -- X68000's 5 bits per colour plus the intensity bit lose only the intensity bit of red and blue.
 constant ASCAL_16BPP          : boolean := true;
 
+-- The R3 memory path (doc/plan.md section 4 item 8): the core's memory in the HyperRAM
+-- (x68_hrmem.vhd on the framework's core port) instead of the SDRAM, which stays idle. For the
+-- R3 board, built and tried on the R6 first. The machine then has 4 MB of main RAM.
+constant X68_HRMEM            : boolean := false;
+
 -- The X68000's 31 kHz modes need no scandoubler; the analog output takes the picture as it is
 -- (mega65.vhd: qnice_scandoubler_o = '0'). The plain line doubler stays selected for later 15 kHz
 -- modes (phase 4).

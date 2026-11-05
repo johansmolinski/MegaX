@@ -3,7 +3,11 @@
 #   make              build obj/sim (ghdl: VHDL -> obj/x68_system.v; Verilator)
 #   make run          run 50 ms from the preloaded boot ROM, frames into obj/frames
 #   make run MS=300   longer
-#   make run FD0=boot the test boot disk (bootdisk/boot.S) in drive 0; FD0=<file> any image
+#   make run FD0=boot the test boot disk (bootdisk/boot.S) in drive 0; FD0=<name> any bootdisk/<name>.S
+#                     (memtest, modetest, gvtest, ...); FD0=<file> any image
+#   make run HRMEM=1 OBJ=obj-hr   the R3 memory path: x68_system with G_HRMEM (x68_hrmem.vhd), the
+#                     boot ROM preloaded into the HyperRAM model (sim_main.cpp); HOG=<p>,<l> holds the
+#                     arbiter's waitrequest <l> of every <p> hr_clk clocks (ascal's share)
 #   make run TRACE=1 OBJ=obj-trace ARGS="--trace ../../t.vcd --trace-from 0.07 --trace-to 0.08"
 #                     VCD of a window (python3 vcdpeek.py shows signals from it)
 #
@@ -23,6 +27,8 @@ ARGS     ?=
 FD0      ?=
 THREADS  ?= 1
 TRACE    ?= 0
+HRMEM    ?= 0
+HOG      ?=
 
 GHDLFLAGS := --std=08 -frelaxed -fsynopsys --workdir=$(abspath $(OBJ)/ghdl)
 
@@ -60,7 +66,7 @@ $(OBJ)/x68_system.v: $(VHDL_SIM) $(CORE)/sources.txt fix_dups.py | $(OBJ)/X68000
 	rm -f $(OBJ)/ghdl/*.cf
 	ghdl -i $(GHDLFLAGS) $(VHDL_SIM)
 	cd $(RUN) && ghdl -m $(GHDLFLAGS) x68_system > $(abspath $(OBJ))/ghdl_make.log 2>&1
-	cd $(RUN) && ghdl --synth $(GHDLFLAGS) --out=verilog x68_system > $(abspath $@).tmp 2> $(abspath $(OBJ))/ghdl_synth.log
+	cd $(RUN) && ghdl --synth $(GHDLFLAGS) $(SYNTH_GEN) --out=verilog x68_system > $(abspath $@).tmp 2> $(abspath $(OBJ))/ghdl_synth.log
 	sed -E 's/\\([A-Za-z_][A-Za-z0-9_]*)\\/\1/g' $@.tmp > $@.tmp2 && rm $@.tmp
 	python3 fix_dups.py $@.tmp2 $@ && rm $@.tmp2
 	@grep -c "warning" $(OBJ)/ghdl_synth.log | xargs echo "ghdl warnings:"
@@ -72,22 +78,32 @@ $(OBJ)/vl/sim: $(OBJ)/x68_system.v $(SV_SIM) sim_main.cpp Makefile
 $(OBJ)/boot_sdram.hex: $(BOOTROM) mkbootimg.py | $(OBJ)/X68000_MiSTerMEGA65
 	python3 mkbootimg.py $< $@
 
-# the test boot disk: a 2HD XDF whose boot sector is bootdisk/boot.S
-$(OBJ)/boot.xdf: bootdisk/boot.S bootdisk/mkxdf.py | $(OBJ)/X68000_MiSTerMEGA65
-	m68k-linux-gnu-as -m68000 $< -o $(OBJ)/boot.o
-	m68k-linux-gnu-objcopy -O binary $(OBJ)/boot.o $(OBJ)/boot.bin
-	python3 bootdisk/mkxdf.py $(OBJ)/boot.bin $@
+# the test boot disks: a 2HD XDF whose boot sector is bootdisk/<name>.S (FD0=<name>)
+$(OBJ)/%.xdf: bootdisk/%.S bootdisk/mkxdf.py | $(OBJ)/X68000_MiSTerMEGA65
+	m68k-linux-gnu-as -m68000 $< -o $(OBJ)/$*.o
+	m68k-linux-gnu-objcopy -O binary $(OBJ)/$*.o $(OBJ)/$*.bin
+	python3 bootdisk/mkxdf.py $(OBJ)/$*.bin $@
 
-ifeq ($(FD0),boot)
-FD0_DEP  := $(OBJ)/boot.xdf
-FD0_ARG  := --fd0 ../../boot.xdf
+ifeq ($(HRMEM),1)
+SYNTH_GEN := -gG_HRMEM=true
+MEM_ARG   := --hr-rom $(abspath $(BOOTROM)) $(if $(HOG),--hr-hog $(HOG))
+MEM_DEP   :=
+else
+SYNTH_GEN :=
+MEM_ARG   := +sdram_init=../../boot_sdram.hex
+MEM_DEP   := $(OBJ)/boot_sdram.hex
+endif
+
+ifneq ($(wildcard bootdisk/$(FD0).S),)
+FD0_DEP  := $(OBJ)/$(FD0).xdf
+FD0_ARG  := --fd0 ../../$(FD0).xdf
 else ifneq ($(FD0),)
 FD0_ARG  := --fd0 $(abspath $(FD0))
 endif
 
-run: $(OBJ)/vl/sim $(OBJ)/boot_sdram.hex $(FD0_DEP)
+run: $(OBJ)/vl/sim $(MEM_DEP) $(FD0_DEP)
 	mkdir -p $(OBJ)/frames
-	cd $(RUN) && ../../vl/sim --ms $(MS) --dump ../../frames +sdram_init=../../boot_sdram.hex $(FD0_ARG) $(ARGS)
+	cd $(RUN) && ../../vl/sim --ms $(MS) --dump ../../frames $(MEM_ARG) $(FD0_ARG) $(ARGS)
 
 clean:
 	rm -rf $(OBJ)

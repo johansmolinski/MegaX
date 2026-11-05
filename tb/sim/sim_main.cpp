@@ -16,13 +16,26 @@
 // 512 bytes (read: sd_buff_dout + one-clock sd_buff_wr per byte; write: sd_buff_din
 // per sd_buff_addr), then sd_ack drops. Writes go to the image in memory only.
 //
+// HyperRAM (x68_system built with G_HRMEM, make HRMEM=1): the framework arbiter's core port
+// as an Avalon slave on hr_clk (100 MHz), 4M words: read latency 15..29 clocks, now and then a
+// gap between read words, a random waitrequest, and with --hr-hog <period>,<length> (hr_clk
+// clocks) waitrequest held for <length> of every <period> clocks, as ascal's bursts take the
+// arbiter first. --hr-rom <boot.rom> preloads the boot ROM where x68_hrmem keeps it (HyperRAM
+// word 0x180000 = the SDRAM's 0x780000). Checkpoints do not cover the HyperRAM model.
+//
+// Memory timing (x68_system's dbg_mem, the R3 probe's lines): per line the time from HCOMP to
+// the end of cachecont's last GVRAM read state (the plane caches must be filled before the next
+// line), the lines whose reads were still running at the next HCOMP, and the 68000's waits for
+// SDRAM reads (read request without acknowledge); printed at the end, to compare the SDRAM and
+// the HyperRAM builds.
+//
 // Video: frames from the scanout (clk_scan, video_ce); one line per frame on stdout
 // (size, lit pixels, checksum); a PPM file whenever the picture changes.
 //
 // usage: sim [--ms <time>] [--dump <dir>] [--max-dumps <n>] [--turbo]
 //            [--slowload <boot.rom>] [--trace <file.vcd> --trace-from <ms> --trace-to <ms>]
 //            [--bus <file> [--bus-from <ms>] [--bus-to <ms>] [--bus-data]]
-//            [--fd0 <image>] [--fd1 <image>]
+//            [--fd0 <image>] [--fd1 <image>] [--hr-rom <boot.rom>] [--hr-hog <period>,<length>]
 //            [--save <file> --save-at <ms>] [--restore <file>] [+plusargs...]
 // Checkpoints (Verilator --savable): --save writes the model and the testbench state
 // at the first clk_sys edge at or after --save-at and runs on; --restore continues
@@ -60,6 +73,45 @@ struct Clock {
 
 static fs_t half_period(double mhz) { return (fs_t)(1e9 / mhz / 2.0 + 0.5); }
 
+// the HyperRAM behind the arbiter's core port (see the header)
+struct HrModel {
+   std::vector<uint16_t> mem = std::vector<uint16_t>(1 << 22, 0);
+   uint32_t rng = 0x12345678;
+   int rd_pend = 0, rd_lat = 0, wr_left = 0;
+   uint32_t rd_addr = 0, wr_addr = 0;
+   bool wait = true, valid = false;
+   uint16_t data = 0;
+   long cyc = 0, hog_period = 0, hog_len = 0;
+   long n_rd = 0, n_wr = 0, w_rd = 0, w_wr = 0, c_wait_core = 0, c_busy = 0;
+   uint32_t rnd() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
+   // a rising edge of hr_clk: the handshakes of the cycle that ends (before the model sees it)
+   void rise(bool write, bool read, uint32_t addr, uint16_t wd, unsigned be, unsigned bc) {
+      cyc++;
+      if ((read || write) && wait) c_wait_core++;
+      if (!wait && read) {
+         rd_addr = addr & 0x3FFFFF; rd_pend = bc; rd_lat = 15 + rnd() % 15; n_rd++;
+      }
+      if (!wait && write) {
+         if (wr_left == 0) { wr_addr = addr & 0x3FFFFF; wr_left = bc; n_wr++; }
+         uint16_t& m = mem[wr_addr];
+         if (be & 2) m = (m & 0x00FF) | (wd & 0xFF00);
+         if (be & 1) m = (m & 0xFF00) | (wd & 0x00FF);
+         wr_addr = (wr_addr + 1) & 0x3FFFFF; wr_left--; w_wr++;
+      }
+      // the next cycle's outputs (driven at the falling edge)
+      valid = false;
+      if (rd_pend) {
+         if (rd_lat) rd_lat--;
+         else if (rnd() % 16) {
+            valid = true; data = mem[rd_addr]; rd_addr = (rd_addr + 1) & 0x3FFFFF; rd_pend--; w_rd++;
+         }
+      }
+      bool hog = hog_period && (cyc % hog_period) < hog_len;
+      wait = rd_pend || hog || rnd() % 4 == 0;
+      if (rd_pend || wr_left || hog) c_busy++;
+   }
+};
+
 // x68k_video_clock.sv: oscillator family of a requested mode (v60 = "60 fps" boost)
 static double family_mhz(unsigned mode, bool v60) {
    if ((mode & 3) == 3) return 50.35;
@@ -85,6 +137,9 @@ int main(int argc, char** argv) {
    std::string save_file, restore_file;
    double save_at_ms = -1.0;
    bool turbo = false;
+   std::string hr_rom;
+   double memlog_ms = 0.0;                               // --memlog <ms>: cachecont's commands until then
+   long hog_period = 0, hog_len = 0;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--ms" && i + 1 < argc) ms_total = atof(argv[++i]);
@@ -104,6 +159,20 @@ int main(int argc, char** argv) {
       else if (a == "--save" && i + 1 < argc) save_file = argv[++i];
       else if (a == "--save-at" && i + 1 < argc) save_at_ms = atof(argv[++i]);
       else if (a == "--restore" && i + 1 < argc) restore_file = argv[++i];
+      else if (a == "--hr-rom" && i + 1 < argc) hr_rom = argv[++i];
+      else if (a == "--memlog" && i + 1 < argc) memlog_ms = atof(argv[++i]);
+      else if (a == "--hr-hog" && i + 1 < argc) sscanf(argv[++i], "%ld,%ld", &hog_period, &hog_len);
+   }
+   HrModel hr;
+   hr.hog_period = hog_period; hr.hog_len = hog_len;
+   if (!hr_rom.empty()) {
+      FILE* f = fopen(hr_rom.c_str(), "rb");
+      if (!f) { fprintf(stderr, "cannot open %s\n", hr_rom.c_str()); return 1; }
+      std::vector<uint8_t> b(1 << 20);
+      if (fread(b.data(), 1, b.size(), f) != b.size()) { fprintf(stderr, "short boot.rom\n"); return 1; }
+      fclose(f);
+      for (size_t n = 0; n < b.size() / 2; n++) hr.mem[0x180000 + n] = (b[2 * n] << 8) | b[2 * n + 1];
+      printf("boot ROM preloaded into the HyperRAM model (%s)\n", hr_rom.c_str());
    }
 
    VerilatedContext* ctx = new VerilatedContext;
@@ -150,6 +219,7 @@ int main(int argc, char** argv) {
    Clock c_ram{half_period(80.0), 0, false};
    Clock c_sys{half_period(40.0), 0, false};
    Clock c_scan{half_period(80.0), 0, false};            // pll_native's power-up output
+   Clock c_hr{half_period(100.0), 0, false};             // hr_clk
 
    // video clock handshake state (x68k_video_clock.sv)
    unsigned candidate = 0, applied = 0, quiet = 0;
@@ -197,6 +267,11 @@ int main(int argc, char** argv) {
    top->ps2_kbd_clk_i = 1;                               // no keyboard: the lines released
    top->ps2_kbd_dat_i = 1;
    top->clk_ram = top->clk_sys = top->clk_scan = 0;
+   top->hr_clk = 0;
+   top->hr_rst = 1;
+   top->hr_waitrequest = 1;
+   top->hr_readdatavalid = 0;
+   top->hr_readdata = 0;
    top->eval();
 
    // 68000 bus monitor
@@ -207,6 +282,11 @@ int main(int argc, char** argv) {
    long bus_cycles = 0;
    std::map<uint32_t, long> fetch_hist;
    long region_rd[256] = {0}, region_wr[256] = {0};      // per 64 KB of address space
+
+   // memory timing (see the header)
+   bool m_hcomp_prev = false, m_rd_prev = false;
+   fs_t m_line_start = 0, m_g_last = 0, m_g_max = 0, m_line_max = 0, m_stall_start = 0, m_stall_max = 0;
+   long m_lines = 0, m_glines = 0, m_late = 0, m_cpu_rd = 0, m_stall_cyc = 0, m_ram_cyc = 0;
 
    // frame capture
    Frame fr;
@@ -242,12 +322,30 @@ int main(int argc, char** argv) {
       fs_t t = c_ram.next;
       if (c_sys.next < t) t = c_sys.next;
       if (c_scan.next < t) t = c_scan.next;
+      if (c_hr.next < t) t = c_hr.next;
       now = t;
       ctx->time(now / FS_PER_PS);
       bool ram_rise = false, sys_rise = false, scan_rise = false;
       if (c_ram.next == t)  { c_ram.val = !c_ram.val;   c_ram.next += c_ram.half;   ram_rise = c_ram.val; }
       if (c_sys.next == t)  { c_sys.val = !c_sys.val;   c_sys.next += c_sys.half;   sys_rise = c_sys.val; }
       if (c_scan.next == t) { c_scan.val = !c_scan.val; c_scan.next += c_scan.half; scan_rise = c_scan.val; }
+      if (c_hr.next == t) {
+         c_hr.val = !c_hr.val; c_hr.next += c_hr.half;
+         if (c_hr.val) {
+            // the handshakes of the ending cycle, with the outputs from before this edge
+            if (now < (fs_t)(memlog_ms * 1e12) && !hr.wait && (top->hr_read || (top->hr_write && hr.wr_left == 0)))
+               printf("[%10.6f ms] hr %s address %06x burstcount %u\n", now / 1e12, top->hr_read ? "read " : "write",
+                      (unsigned)top->hr_address, (unsigned)top->hr_burstcount);
+            hr.rise(top->hr_write, top->hr_read, top->hr_address, top->hr_writedata,
+                    top->hr_byteenable, top->hr_burstcount);
+            if (now > 2000000000ULL) top->hr_rst = 0;            // 2 us
+         } else {
+            top->hr_waitrequest = hr.wait;
+            top->hr_readdatavalid = hr.valid;
+            top->hr_readdata = hr.data;
+         }
+      }
+      top->hr_clk = c_hr.val;
       top->clk_ram = c_ram.val;
       top->clk_sys = c_sys.val;
       top->clk_scan = c_scan.val;
@@ -263,7 +361,64 @@ int main(int argc, char** argv) {
          if (now >= (fs_t)(trace_to_ms * 1e12)) { tfp->close(); delete tfp; tfp = nullptr; trace_done = true; }
       }
 #endif
-      (void)ram_rise;
+      if (ram_rise) {
+         uint64_t dm = top->dbg_mem;
+         static uint64_t dm_prev = ~0ULL;
+         // --memlog: every change of cachecont's class, rd, wr, busy, abort (de words counted)
+         static long de_n = 0;
+         if ((dm >> 41) & 1) de_n++;
+         if (now < (fs_t)(memlog_ms * 1e12) && ((dm ^ dm_prev) & (0x3FULL << 42 | 1ULL << 40 | 7ULL << 45))) {
+            printf("[%10.6f ms] mem class %u rd %u wr %u busy %u abort %u bw %u addrh %04x bgn %02x end %02x (de words so far %ld)\n",
+                   now / 1e12, (unsigned)(dm >> 45) & 7, (unsigned)(dm >> 44) & 1, (unsigned)(dm >> 43) & 1,
+                   (unsigned)(dm >> 42) & 1, (unsigned)(dm >> 40) & 1, (unsigned)(dm >> 36) & 15,
+                   (unsigned)(dm >> 16) & 0xFFFF, (unsigned)(dm >> 8) & 0xFF, (unsigned)dm & 0xFF, de_n);
+         }
+         // a busy period of more than 50 us: the last commands (a lost read, a hang)
+         static fs_t busy_since = 0;
+         static bool busy_told = false;
+         struct Cmd { fs_t t; uint64_t dm; };
+         static Cmd ring[32];
+         static int ring_n = 0;
+         static long long_busy = 0;
+         if ((((dm >> 44) & 1) && !((dm_prev >> 44) & 1)) || (((dm >> 43) & 1) && !((dm_prev >> 43) & 1)))
+            ring[ring_n++ % 32] = {now, dm};
+         bool busy = (dm >> 42) & 1;
+         if (busy && !((dm_prev >> 42) & 1)) { busy_since = now; busy_told = false; }
+         if (busy && !busy_told && now - busy_since > (fs_t)50e9) {
+            busy_told = true;
+            if (long_busy++ < 5) {
+               printf("[%10.6f ms] memory busy for 50 us since %.6f ms; the last commands:\n", now / 1e12, busy_since / 1e12);
+               for (int k = ring_n > 32 ? ring_n - 32 : 0; k < ring_n; k++) {
+                  uint64_t d = ring[k % 32].dm;
+                  printf("   %.6f ms %s class %u bw %u addrh %04x bgn %02x end %02x\n", ring[k % 32].t / 1e12,
+                         (d >> 44) & 1 ? "read " : "write", (unsigned)(d >> 45) & 7, (unsigned)(d >> 36) & 15,
+                         (unsigned)(d >> 16) & 0xFFFF, (unsigned)(d >> 8) & 0xFF, (unsigned)d & 0xFF);
+               }
+            }
+         }
+         dm_prev = dm;
+         bool hcomp = (dm >> 49) & 1, rd = (dm >> 51) & 1, ack = (dm >> 50) & 1;
+         unsigned cls = (dm >> 45) & 7;
+         m_ram_cyc++;
+         if (cls == 2) m_g_last = now;
+         if (hcomp && !m_hcomp_prev) {
+            if (m_line_start) {
+               m_lines++;
+               if (now - m_line_start > m_line_max) m_line_max = now - m_line_start;
+               if (m_g_last > m_line_start) {
+                  m_glines++;
+                  if (m_g_last - m_line_start > m_g_max) m_g_max = m_g_last - m_line_start;
+               }
+               if (cls == 2) m_late++;
+            }
+            m_line_start = now;
+         }
+         m_hcomp_prev = hcomp;
+         if (rd && !m_rd_prev) { m_cpu_rd++; m_stall_start = now; }
+         if (rd && !ack) m_stall_cyc++;
+         if (!rd && m_rd_prev && now - m_stall_start > m_stall_max) m_stall_max = now - m_stall_start;
+         m_rd_prev = rd;
+      }
 
       if (sys_rise) {
          sys_cycles++;
@@ -480,6 +635,14 @@ int main(int argc, char** argv) {
 #if VM_TRACE
    if (tfp) tfp->close();
 #endif
+   printf("memory: %ld lines (longest %.2f us), %ld with GVRAM reads, the latest ended %.2f us after HCOMP, "
+          "%ld still reading at the next HCOMP; 68000: %ld memory reads, waiting %.2f %% of the time, longest %.2f us\n",
+          m_lines, m_line_max / 1e9, m_glines, m_g_max / 1e9, m_late, m_cpu_rd,
+          100.0 * m_stall_cyc / (m_ram_cyc ? m_ram_cyc : 1), m_stall_max / 1e9);
+   if (hr.n_rd || hr.n_wr)
+      printf("HyperRAM: %ld read bursts (%ld words), %ld write bursts (%ld words); busy %.1f %% of the time "
+             "(hog included), the core's requests waited %ld clocks\n", hr.n_rd, hr.w_rd, hr.n_wr, hr.w_wr,
+             100.0 * hr.c_busy / (hr.cyc ? hr.cyc : 1), hr.c_wait_core);
    printf("[%8.3f ms] end, %ld frames\n", now / 1e12, frame_no);
    delete top;
    delete ctx;

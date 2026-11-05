@@ -18,6 +18,11 @@
 -- The SDRAM clock is clk_ram inverted (the MiSTer's altddio_out with D1=0,
 -- D2=1); the platform generates it.
 --
+-- G_HRMEM (the R3 board, doc/plan.md section 4 item 8): no SDRAM; the core's memory goes to
+-- the HyperRAM through x68_hrmem.vhd and the hr_* port (the framework arbiter's core port,
+-- hr_clk), the SDRAM pins idle. The machine then sees 4 MB of main RAM (vis_mem), all the
+-- HyperRAM has room for next to ascal's frame buffer.
+--
 -- Disk images reach the core through MiSTer's hps_io sector interface (img_*,
 -- sd_*), served by the platform: the testbench in simulation, the SD card
 -- sector service on the MEGA65. The mount glue of X68000.sv is here.
@@ -36,6 +41,9 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity x68_system is
+generic (
+   G_HRMEM        : boolean := false                       -- the memory in the HyperRAM (R3)
+);
 port (
    clk_ram        : in    std_logic;
    clk_sys        : in    std_logic;
@@ -72,6 +80,19 @@ port (
    sdram_ba       : out   std_logic_vector(1 downto 0);
    sdram_a        : out   std_logic_vector(12 downto 0);
    sdram_dq       : inout std_logic_vector(15 downto 0);
+
+   -- HyperRAM (hr_clk), with G_HRMEM: the framework arbiter's core port (Avalon, 16-bit words)
+   hr_clk         : in    std_logic := '0';
+   hr_rst         : in    std_logic := '1';
+   hr_write       : out   std_logic;
+   hr_read        : out   std_logic;
+   hr_address     : out   std_logic_vector(31 downto 0);
+   hr_writedata   : out   std_logic_vector(15 downto 0);
+   hr_byteenable  : out   std_logic_vector(1 downto 0);
+   hr_burstcount  : out   std_logic_vector(7 downto 0);
+   hr_readdata    : in    std_logic_vector(15 downto 0) := (others => '0');
+   hr_readdatavalid : in  std_logic := '0';
+   hr_waitrequest : in    std_logic := '1';
 
    -- Video (clk_scan): RGB, active-high syncs, ce_pix one clock per pixel
    video_ce       : out   std_logic;
@@ -137,6 +158,25 @@ port (
 end entity x68_system;
 
 architecture synthesis of x68_system is
+
+   -- the external memory controller (G_HRMEM): memcont's SDRAMC lines
+   signal vis_mem      : std_logic_vector(3 downto 0);
+   signal xr_addrh     : std_logic_vector(15 downto 0);
+   signal xr_bgn       : std_logic_vector(7 downto 0);
+   signal xr_end       : std_logic_vector(7 downto 0);
+   signal xr_bwidth    : std_logic_vector(3 downto 0);
+   signal xr_wrdat     : std_logic_vector(15 downto 0);
+   signal xr_we        : std_logic_vector(1 downto 0);
+   signal xr_rd        : std_logic;
+   signal xr_wr        : std_logic;
+   signal xr_refrsh    : std_logic;
+   signal xr_abort     : std_logic;
+   signal xr_addr_rc   : std_logic_vector(7 downto 0);
+   signal xr_addr_wc   : std_logic_vector(7 downto 0);
+   signal xr_rddat     : std_logic_vector(15 downto 0);
+   signal xr_de        : std_logic;
+   signal xr_busy      : std_logic;
+   signal xr_initdone  : std_logic;
 
    -- clock enables (X68000.sv)
    signal div_sys      : unsigned(1 downto 0) := (others => '0');
@@ -378,6 +418,9 @@ begin
                 sd_ack(7 downto 2) & fd_ack & fd_ack;
 
    i_core : entity work.X68K_top
+   generic map (
+      EXT_RAMC         => G_HRMEM
+   )
    port map (
       ramclk           => clk_ram,
       sysclk           => clk_sys,
@@ -496,11 +539,81 @@ begin
       mix_fix          => '1',
       disk_mode        => disk_mode,
       sxsi_inject      => sxsi_inject,
-      vis_mem          => "0000",
+      vis_mem          => vis_mem,
       dbg_bus          => dbg_bus,
       dbg_opm          => dbg_opm,
-      dbg_mem          => dbg_mem
+      dbg_mem          => dbg_mem,
+      xr_addrh_o       => xr_addrh,
+      xr_bgn_o         => xr_bgn,
+      xr_end_o         => xr_end,
+      xr_bwidth_o      => xr_bwidth,
+      xr_wrdat_o       => xr_wrdat,
+      xr_we_o          => xr_we,
+      xr_rd_o          => xr_rd,
+      xr_wr_o          => xr_wr,
+      xr_refrsh_o      => xr_refrsh,
+      xr_abort_o       => xr_abort,
+      xr_addr_rc_i     => xr_addr_rc,
+      xr_addr_wc_i     => xr_addr_wc,
+      xr_rddat_i       => xr_rddat,
+      xr_de_i          => xr_de,
+      xr_busy_i        => xr_busy,
+      xr_initdone_i    => xr_initdone
    );
+
+   -- the memory in the HyperRAM (R3): 4 MB of main RAM for the machine ("Visible Memory"
+   -- 4 MB: X68K_top puts it into the SRAM's memory size byte)
+   vis_mem <= "0100" when G_HRMEM else "0000";
+
+   G_HR : if G_HRMEM generate
+      i_hrmem : entity work.x68_hrmem
+      port map (
+         clk_i              => clk_ram,
+         rstn_i             => locked,
+         addr_high_i        => xr_addrh,
+         bgnaddr_i          => xr_bgn,
+         endaddr_i          => xr_end,
+         bwidth_i           => xr_bwidth,
+         addr_rc_o          => xr_addr_rc,
+         addr_wc_o          => xr_addr_wc,
+         rddat_o            => xr_rddat,
+         wrdat_i            => xr_wrdat,
+         de_o               => xr_de,
+         we_i               => xr_we,
+         rd_i               => xr_rd,
+         wr_i               => xr_wr,
+         refrsh_i           => xr_refrsh,
+         abort_i            => xr_abort,
+         busy_o             => xr_busy,
+         initdone_o         => xr_initdone,
+         hr_clk_i           => hr_clk,
+         hr_rst_i           => hr_rst,
+         hr_write_o         => hr_write,
+         hr_read_o          => hr_read,
+         hr_address_o       => hr_address,
+         hr_writedata_o     => hr_writedata,
+         hr_byteenable_o    => hr_byteenable,
+         hr_burstcount_o    => hr_burstcount,
+         hr_readdata_i      => hr_readdata,
+         hr_readdatavalid_i => hr_readdatavalid,
+         hr_waitrequest_i   => hr_waitrequest
+      );
+   end generate G_HR;
+
+   G_NOHR : if not G_HRMEM generate
+      hr_write      <= '0';
+      hr_read       <= '0';
+      hr_address    <= (others => '0');
+      hr_writedata  <= (others => '0');
+      hr_byteenable <= (others => '0');
+      hr_burstcount <= (others => '0');
+      xr_addr_rc    <= (others => '0');
+      xr_addr_wc    <= (others => '0');
+      xr_rddat      <= (others => '0');
+      xr_de         <= '0';
+      xr_busy       <= '0';
+      xr_initdone   <= '0';
+   end generate G_NOHR;
 
    -- X68000.sv swaps the channels on purpose (pSndL => aud_r).
    audio_l <= snd_r;

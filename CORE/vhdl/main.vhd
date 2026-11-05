@@ -42,6 +42,9 @@ library unisim;
 use unisim.vcomponents.all;
 
 entity main is
+   generic (
+      G_HRMEM                 : boolean := false   -- the core's memory in the HyperRAM (R3, x68_system)
+   );
    port (
       clk_ram_i               : in    std_logic;
       clk_sys_i               : in    std_logic;
@@ -97,6 +100,19 @@ entity main is
       dbg_bus_o               : out   std_logic_vector(47 downto 0);  -- x68_trace.vhd
       dbg_opm_o               : out   std_logic_vector(15 downto 0);  -- x68_trace.vhd
       dbg_mem_o               : out   std_logic_vector(51 downto 0);  -- R3 study (temporary, x68_r3probe.vhd)
+
+      -- the HyperRAM arbiter's core port (hr_clk), used with G_HRMEM
+      hr_clk_i                : in    std_logic;
+      hr_rst_i                : in    std_logic;
+      hr_write_o              : out   std_logic;
+      hr_read_o               : out   std_logic;
+      hr_address_o            : out   std_logic_vector(31 downto 0);
+      hr_writedata_o          : out   std_logic_vector(15 downto 0);
+      hr_byteenable_o         : out   std_logic_vector(1 downto 0);
+      hr_burstcount_o         : out   std_logic_vector(7 downto 0);
+      hr_readdata_i           : in    std_logic_vector(15 downto 0);
+      hr_readdatavalid_i      : in    std_logic;
+      hr_waitrequest_i        : in    std_logic;
 
       -- Audio output (clk_sys, signed PCM)
       audio_left_o            : out   signed(15 downto 0);
@@ -278,6 +294,9 @@ begin
    ---------------------------------------------------------------------------------------------
 
    i_x68_system : entity work.x68_system
+      generic map (
+         G_HRMEM        => G_HRMEM
+      )
       port map (
          clk_ram        => clk_ram_i,
          clk_sys        => clk_sys_i,
@@ -303,6 +322,17 @@ begin
          sdram_ba       => sdram_ba_o,
          sdram_a        => sdram_a_o,
          sdram_dq       => sdram_dq_io,
+         hr_clk         => hr_clk_i,
+         hr_rst         => hr_rst_i,
+         hr_write       => hr_write_o,
+         hr_read        => hr_read_o,
+         hr_address     => hr_address_o,
+         hr_writedata   => hr_writedata_o,
+         hr_byteenable  => hr_byteenable_o,
+         hr_burstcount  => hr_burstcount_o,
+         hr_readdata    => hr_readdata_i,
+         hr_readdatavalid => hr_readdatavalid_i,
+         hr_waitrequest => hr_waitrequest_i,
          video_ce       => v_ce,
          video_r        => v_r,
          video_g        => v_g,
