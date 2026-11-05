@@ -682,3 +682,7 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   tb/hrmem: 5 seeds and 3 with M2M=1 pass.
 - `megax-hr6` = hr5 + the fix (REF megax-hr5, NO_REF_SYNTH=1): its self-test now runs on the
   working HyperRAM, so its result on the drive LED means something.
+- `megax-hr6`: TIMING-FAILED, WNS -2.637 ns, the one path hr_rst -> hrrst_s1 (hr_clk -> clk_ram,
+  2.5 ns); everything else met (+0.102 ns). The new constraint had no `-from` ("set_max_delay
+  -datapath_only requires -from to be non-empty", critical warning, dropped); now `-from
+  [get_clocks hr_clk]`. `megax-hr7` = hr6 with that (REF megax-hr6).
