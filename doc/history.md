@@ -575,3 +575,48 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
     than one line (step 2 of the plan). The small write-backs (1-2 words, one HyperRAM command
     each) are worth batching.
   - The snow says ascal's share needs protecting too: shorter bursts for the core's port.
+
+## 2026-11-05 - R3 step 2: the core's memory in the HyperRAM (x68_hrmem), in simulation
+
+- `CORE/vhdl/x68_hrmem.vhd` takes the place of the core's SDRAM controller under cachecont: the
+  fork's memcont got a generic `EXT_RAMC` (SDRAMC's lines to `xr_` ports, X68K_top passes them
+  through); `x68_system` `G_HRMEM`, `globals.vhd` `X68_HRMEM` (off: the R6 build is unchanged),
+  `main.vhd`/`mega65.vhd` route the framework arbiter's core port to it (the R3 probe's mirror
+  then sees a port that never answers). HyperRAM layout: ascal's frame buffer (1 MB), GVRAM, the
+  ROMs, 4 MB of main RAM (vis_mem 4 MB), the rest aliased (no D88 on R3).
+  - Inside: three dual-clock FIFOs (`x68_afifo.vhd`, written out so that tb/sim runs the same
+    code), bursts of at most 64 words, posted writes, the HyperRAM side keeps the order.
+  - SDRAMC's behaviour, measured with its chip model and copied exactly: a read gives
+    ((end - bgn - 2) mod 2^bwidth) + 2 words with de (one round more when end = bgn + 1), and one
+    more word, the one at end, in the clock after the last de word with busy already low
+    (cachecont's fast clear takes it on de's falling edge); a write writes at least two words;
+    write data come one clock after addr_wc.
+- `tb/hrmem`: the same 4000 random commands through SDRAMC and x68_hrmem, both against a
+  reference model. Found and fixed: the write side threw the next write's words away in the
+  clock after a write's last burst; one tag for reads and writes let a read take an aborted
+  read's late words (an abort, three posted writes); four aborted reads in a row wrapped the
+  read tag (now the words of aborted reads are counted and dropped). 50 seeds pass.
+- tb/sim (`HRMEM=1`, a HyperRAM model with waits and gaps, `HOG=256,100`: the arbiter taken 39 %
+  of the time, as by ascal): ghdl's synthesis dropped memcont's assignments from the `xr_`
+  ports inside the generate (busy never reached cachecont: no picture at all), now chosen
+  outside it; the first read was lost when the HyperRAM side left its reset after the core's
+  first command (the idle state popped the command in reset; the 68000 waited 769 us for the
+  timeout), now commands wait for the reset to end (and tb/hrmem has the case).
+  - **`gvtest` (new boot disk: 512x512 in 65536 colours, all of GVRAM, then main-RAM traffic):
+    the HyperRAM build shows the same frames as the SDRAM build** (12 frames in a row with
+    the same checksums, all 262140 pixels lit; the HyperRAM one 3 frames later, its 68000 is
+    slower).
+
+    | | SDRAM | HyperRAM, 39 % taken |
+    | --- | --- | --- |
+    | GVRAM line reads: latest end after HCOMP (line 31.75 us) | 8.31 us | 15.41 us |
+    | lines still reading at the next HCOMP | 0 | 0 |
+    | the 68000 waiting for memory | 6.34 % | 9.01 % |
+    | its longest wait | 7.25 us | 14.05 us |
+
+- Vivado, R6 with `X68_HRMEM` on: `megax-hr1` (incremental from megax-r3a) TIMING-FAILED: the
+  crossing constraints named Gray pointer registers Vivado had merged into the binary ones,
+  the burst length logic had 15 levels, and the TVRAM address fan-out routed 13.8 ns. Now the
+  constraints name the synchronisers, the counts and the burst length are registered: **`megax-hr2`
+  (non-incremental) OK, WNS +0.103 ns**, block RAM 327.5 tiles, crossings +2.5/+3.0 ns under
+  their 8 ns bound. `megax-hr3` adds the reset fix.

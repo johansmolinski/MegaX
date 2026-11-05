@@ -15,7 +15,9 @@ python3 ppm2png.py obj/frames/*.ppm
 Disks: `make run FD0=boot` mounts the test boot disk (`bootdisk/boot.S`: a 2HD
 boot sector of our own that prints through the IPL's IOCS and draws colour bars,
 built into a 1232 KB XDF by `bootdisk/mkxdf.py`); `FD0=<image>` mounts any image
-(XDF/DIM/HDM by name, else D88). The testbench serves MiSTer's hps_io sector
+(XDF/DIM/HDM by name, else D88); `FD0=<name>` builds and mounts any
+`bootdisk/<name>.S` (`memtest`, `modetest`, `vidtest`, `gvtest`: GVRAM in 65536 colours, all
+512 KB, then main-RAM traffic forever). The testbench serves MiSTer's hps_io sector
 interface (`img_*`, `sd_*` of `x68_system`), the same one the MEGA65 shell will
 serve from the SD card.
 
@@ -23,6 +25,15 @@ serve from the SD card.
 CGROM, Sharp's; default: the copy in the submodule's `releases/` folder, never
 copied into this repository). `ARGS="--turbo"`, `ARGS="--slowload <boot.rom>"`,
 `TRACE=1` + `ARGS="--fst x.fst --fst-from <ms>"` as described in `sim_main.cpp`.
+
+The R3 memory path: `make run HRMEM=1 OBJ=obj-hr` builds `x68_system` with `G_HRMEM`
+(`x68_hrmem.vhd` in place of the SDRAM controller) and serves its HyperRAM port with a model
+in `sim_main.cpp` (read latency 15..29 clocks, gaps, random waitrequest; the boot ROM preloaded
+where `x68_hrmem` keeps it); `HOG=<period>,<length>` holds waitrequest `<length>` of every
+`<period>` hr_clk clocks, ascal's share of the arbiter. Every run ends with memory timing
+statistics (`memory: ...`: per line the time from HCOMP to the end of the GVRAM reads, the
+68000's waits for memory); `ARGS="--memlog <ms>"` logs cachecont's commands, and a busy
+period of more than 50 us prints the last 32 commands.
 
 ## How it is put together
 
@@ -108,6 +119,13 @@ UNISIM/XPM primitives (`unisim_stub.vhd`, `xpm_stub.vhd`). Run them on the Fedor
 - `run_sd.sh` (`tb_sd.vhd`): `x68_sd.vhd` with an SD host engine-port model and a core model
   speaking hps_io's sector protocol: the mount pulse, the extent-map arithmetic across two
   extents, reads, a write, an LBA beyond the file.
+
+`tb/hrmem/run.sh` (SystemVerilog, Verilator): `x68_hrmem` against the core's own SDRAM controller
+(`SDRAMC` with its chip model) and a reference model, the same 4000 random commands of
+cachecont's kinds (whole-block and partial reads with wrap, bwidth 7 and 8, writes of 1..256 words
+with byte enables, refreshes, aborted reads); every read's words, column addresses and the word
+after them must agree; an Avalon HyperRAM model with random waits, gaps and ascal-like stretches;
+the HyperRAM side leaves reset 30 us late. `obj/vl/tb +verilator+seed+<n>` reruns another seed.
 
 Vivado problems are narrowed down with out-of-context syntheses (`tools/synth/ooc.tcl`,
 `tools/synth/mkwrap.py` for a pass-through wrapper), about a minute each on the host.

@@ -235,6 +235,10 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
      on VGA and HDMI** (the user, 2026-11-04): no late GVRAM lines, no snow on HDMI, in the
      file manager (the GVRAM mode measured in step 1), Human68k and games; speed and the rest
      after that.
+     In simulation since 2026-11-05 (`x68_hrmem.vhd`, `doc/history.md`): no reorder needed
+     after all; cachecont's own order with short bursts keeps the worst GVRAM line read at
+     15.4 us of 31.75 us with the arbiter 39 % taken, and the frames are those of the SDRAM
+     build. Next: the R6 build `megax-hr3` on the hardware (VGA, HDMI), then the measurements.
    - Step 3: R3's top and constraints (M2M has them; Megamiga's copy is unused since its 0.2.0),
      the SD sector service, a second project `CORE-R3.xpr`, AGENTS.md rule 6.
    - Fallbacks if the GVRAM reads miss their deadline:
