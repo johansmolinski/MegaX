@@ -653,3 +653,8 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   `x68_hrtest.vhd`, a self-test of the HyperRAM path before memcont gets it: 24 blocks of 256
   words, a full write, a byte-masked write, a read-back). The LEDs (X68_HRMEM only, mega65.vhd)
   show the start-up stage (power LED) and the memory path (drive LED) with the Shell frozen.
+- `megax-hr4` (REF megax-hr3) OK, WNS +0.103 ns. `megax-hr5`: the incremental synthesis from
+  hr4's checkpoint segfaulted after "Mimic Skeleton from Reference" (the new x68_hrtest changed
+  the hierarchy); with `NO_REF_SYNTH=1` (implementation still incremental) OK, WNS +0.102 ns.
+  tb/sim: the self-test passes (flags 0205) and the machine boots after it; a copy with a
+  mutated expectation reports the errors (0605). Neither build loaded yet.
