@@ -724,3 +724,25 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   150 ms six reads were aborted during their words (SDRAMC also takes abort only in its data
   phase). Build `megax-hr9`.
 - `megax-hr9` OK, WNS +0.000 ns (gpal -> LBUFWD, met), 35 critical warnings as before.
+
+## 2026-11-05 The root cause: cacheext sampled the CPU clock as data
+
+- `megax-hr9` on the R6 (21:29), `tools/hrstate.py` at the hang: this time the 68000 stopped
+  after 19 bus cycles (reading 7f8288, the IPL's second fill). cachecont refreshing and idle,
+  sb_rd 1, braddrnone 0: read block 1 holds line 7f8280, its word is there (cacheext rdb 1), but
+  cacheext's mask is 0, so brcache_ext is 0 and the CPU gets no acknowledge, for ever; every
+  other block has mask 1.
+- cacheext (upstream) lowers mask at the block's clear and raises it after two rising edges of
+  rclk (the CPU side's clock, 40 MHz), which it counted by sampling rclk itself as data in wclk's
+  domain (srclk <= rclk, 80 MHz). clk_sys and clk_ram come from one MMCM with aligned edges, so
+  every sample falls on an edge of clk_sys and what it sees depends on the routing: a read
+  block whose sampler never sees a rising edge never raises its mask. One such block per
+  build, placed by the routing: in hr7/hr8 (hr8 implemented incrementally from hr7, the same
+  placement) the block of the seventh fill, in hr9 that of the second. That is why the hang
+  was deterministic per build and never seen in tb/sim; the SDRAM builds had placements where
+  every block worked (luck: any rebuild could have hit it).
+- Fix (fork be44860, cacheext.vhd, provenance comment): rclk's side toggles rtog at every edge
+  with sys_ce (the edges at which it steps its read pipeline), wclk's side takes it through two
+  registers and counts its changes; rd waits one or two clk_ram clocks longer after a clear.
+  tb/sim HRMEM=1 with the board's resets: the same boot (mode 5 at 325.200 ms, flags 0205).
+- `megax-hr10` = hr9 + the fix (REF megax-hr9).
