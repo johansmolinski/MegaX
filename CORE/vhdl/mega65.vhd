@@ -32,6 +32,9 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+library xpm;
+use xpm.vcomponents.all;
+
 library work;
 use work.globals.all;
 use work.types_pkg.all;
@@ -368,6 +371,8 @@ signal main_x68_reset         : std_logic := '1';
 signal main_fd_motor          : std_logic;
 signal main_boot_ended_d      : std_logic := '0';
 signal main_dbg_status        : std_logic_vector(5 downto 0);
+signal main_dbg_hr            : std_logic_vector(8 downto 0);   -- R3 bring-up flags (clk_ram, hr_clk, clk_sys)
+signal main_dbg_hr_s          : std_logic_vector(8 downto 0);   -- ... in main_clk
 signal main_dbg_scan          : std_logic_vector(7 downto 0);
 signal main_dbg_bus           : std_logic_vector(47 downto 0);
 signal main_dbg_opm           : std_logic_vector(15 downto 0);
@@ -657,10 +662,46 @@ begin
 
    -- Power LED: green; blue while the reset button is held long. Drive LED: yellow while a
    -- floppy motor runs (MiSTer's user LED, X68000.sv's fdd_active).
+   -- R3 bring-up (X68_HRMEM, temporary): the start-up as colours, readable with the Shell frozen
+   -- (x68_boot stalls QNICE while the core takes no bytes). Power LED: white = no boot ROM byte
+   -- yet, magenta = loading, red = a byte waited 26 ms (the load hangs), yellow = loaded, the
+   -- Shell holds the X68000 in reset, green = the 68000 runs. Drive LED (sticky, the first that
+   -- happened in this order): red = commands waited 10 ms with the HyperRAM side idle, magenta =
+   -- waitrequest held 10 ms, cyan = read words missing for 10 ms, blue = a read timed out,
+   -- orange = busy 13 ms without a break, white = no burst completed (yet); else yellow with a
+   -- floppy motor, off.
+   i_dbg_hr_cdc : xpm_cdc_array_single
+      generic map (
+         DEST_SYNC_FF   => 2,
+         INIT_SYNC_FF   => 1,
+         SRC_INPUT_REG  => 0,
+         WIDTH          => 9
+      )
+      port map (
+         src_clk  => '0',
+         src_in   => main_dbg_hr,
+         dest_clk => main_clk,
+         dest_out => main_dbg_hr_s
+      );
+
    main_power_led_o     <= '1';
-   main_power_led_col_o <= x"0000FF" when main_reset_m2m_i else x"00FF00";
-   main_drive_led_o     <= main_fd_motor;
-   main_drive_led_col_o <= x"FFFF00";
+   main_power_led_col_o <= x"0000FF" when main_reset_m2m_i else
+                           x"00FF00" when not X68_HRMEM else
+                           x"FF0000" when main_dbg_hr_s(8) = '1' else
+                           x"FFFFFF" when main_dbg_status(0) = '0' else
+                           x"FF00FF" when main_dbg_status(1) = '0' else
+                           x"FFFF00" when main_dbg_status(3) = '1' else
+                           x"00FF00";
+   main_drive_led_o     <= '1' when X68_HRMEM else main_fd_motor;
+   main_drive_led_col_o <= x"FFFF00" when not X68_HRMEM else
+                           x"FF0000" when main_dbg_hr_s(6) = '1' else
+                           x"FF00FF" when main_dbg_hr_s(4) = '1' else
+                           x"00FFFF" when main_dbg_hr_s(5) = '1' else
+                           x"0000FF" when main_dbg_hr_s(7) = '1' else
+                           x"FF8000" when main_dbg_hr_s(1) = '1' else
+                           x"FFFFFF" when main_dbg_hr_s(2) = '0' or main_dbg_hr_s(0) = '0' else
+                           x"FFFF00" when main_fd_motor = '1' else
+                           x"000000";
 
    -- The X68000's reset: the M2M resets (reset button, the Shell's CSR reset, i.e. the OSM's
    -- "Reset the X68000"), only once the boot ROM is in (see the header)
@@ -725,6 +766,7 @@ begin
          dbg_bus_o            => main_dbg_bus,
          dbg_opm_o            => main_dbg_opm,
          dbg_mem_o            => main_dbg_mem,
+         dbg_hr_o             => main_dbg_hr,
          hr_clk_i             => hr_clk_i,
          hr_rst_i             => hr_rst_i,
          hr_write_o           => main_hr_write,

@@ -22,6 +22,22 @@ package vcomponents is
       );
    end component;
 
+   component xpm_cdc_array_single is
+      generic (
+         DEST_SYNC_FF   : integer := 4;
+         INIT_SYNC_FF   : integer := 0;
+         SIM_ASSERT_CHK : integer := 0;
+         SRC_INPUT_REG  : integer := 1;
+         WIDTH          : integer := 2
+      );
+      port (
+         src_clk  : in  std_logic;
+         src_in   : in  std_logic_vector(WIDTH - 1 downto 0);
+         dest_clk : in  std_logic;
+         dest_out : out std_logic_vector(WIDTH - 1 downto 0)
+      );
+   end component;
+
    component xpm_cdc_async_rst is
       generic (
          DEST_SYNC_FF    : integer := 4;
@@ -90,6 +106,41 @@ architecture sim of xpm_cdc_single is
    signal sr : std_logic_vector(DEST_SYNC_FF - 1 downto 0) := (others => '0');
 begin
    sr <= sr(DEST_SYNC_FF - 2 downto 0) & src_in when rising_edge(dest_clk);
+   dest_out <= sr(DEST_SYNC_FF - 1);
+end architecture;
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity xpm_cdc_array_single is
+   generic (
+      DEST_SYNC_FF   : integer := 4;
+      INIT_SYNC_FF   : integer := 0;
+      SIM_ASSERT_CHK : integer := 0;
+      SRC_INPUT_REG  : integer := 1;
+      WIDTH          : integer := 2
+   );
+   port (
+      src_clk  : in  std_logic;
+      src_in   : in  std_logic_vector(WIDTH - 1 downto 0);
+      dest_clk : in  std_logic;
+      dest_out : out std_logic_vector(WIDTH - 1 downto 0)
+   );
+end entity;
+
+architecture sim of xpm_cdc_array_single is
+   type t_sr is array (0 to DEST_SYNC_FF - 1) of std_logic_vector(WIDTH - 1 downto 0);
+   signal sr : t_sr := (others => (others => '0'));
+begin
+   process (dest_clk)
+   begin
+      if rising_edge(dest_clk) then
+         sr(0) <= src_in;
+         for i in 1 to DEST_SYNC_FF - 1 loop
+            sr(i) <= sr(i - 1);
+         end loop;
+      end if;
+   end process;
    dest_out <= sr(DEST_SYNC_FF - 1);
 end architecture;
 

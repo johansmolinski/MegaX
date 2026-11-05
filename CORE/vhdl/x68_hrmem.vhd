@@ -81,7 +81,13 @@ entity x68_hrmem is
       hr_burstcount_o     : out std_logic_vector(7 downto 0);
       hr_readdata_i       : in  std_logic_vector(15 downto 0);
       hr_readdatavalid_i  : in  std_logic;
-      hr_waitrequest_i    : in  std_logic
+      hr_waitrequest_i    : in  std_logic;
+
+      -- the bring-up flags (sticky, for the LEDs, mega65.vhd): 7 a read timed out, 6 commands
+      -- waited 10 ms in the FIFO with the HyperRAM side idle, 5 a read waited 10 ms for its
+      -- words, 4 waitrequest held 10 ms, 3 hr_rst (live), 2 a burst has completed, 1 busy
+      -- 13 ms without a break, 0 initdone (live)
+      dbg_o               : out std_logic_vector(7 downto 0)
    );
 end entity x68_hrmem;
 
@@ -177,6 +183,18 @@ architecture rtl of x68_hrmem is
    signal h_next_len   : unsigned(8 downto 0);
    signal h_len_r      : unsigned(8 downto 0) := (others => '0');   -- h_next_len, registered
    signal h_prep       : std_logic := '1';                          -- h_len_r not yet valid
+
+   -- the bring-up flags (dbg_o)
+   signal d_busy_cnt   : unsigned(20 downto 0) := (others => '0');
+   signal d_stuck      : std_logic := '0';
+   signal d_tmo        : std_logic := '0';
+   signal d_wq_cnt     : unsigned(20 downto 0) := (others => '0');
+   signal d_rd_cnt     : unsigned(20 downto 0) := (others => '0');
+   signal d_id_cnt     : unsigned(20 downto 0) := (others => '0');
+   signal d_wq_stuck   : std_logic := '0';
+   signal d_rd_stuck   : std_logic := '0';
+   signal d_id_stuck   : std_logic := '0';
+   signal d_burst      : std_logic := '0';
 
 begin
 
@@ -501,5 +519,52 @@ begin
          end if;
       end if;
    end process p_hr;
+
+   ------------------------------------------------------------------------------------------
+   -- the bring-up flags
+   ------------------------------------------------------------------------------------------
+
+   p_dbg_ram : process (clk_i)
+   begin
+      if rising_edge(clk_i) then
+         if state = S_IDLE and rd_i = '0' and wr_i = '0' and refrsh_i = '0' then
+            d_busy_cnt <= (others => '0');
+         elsif d_busy_cnt(20) = '0' then
+            d_busy_cnt <= d_busy_cnt + 1;
+         else
+            d_stuck <= '1';
+         end if;
+         if state = S_RDATA and idle_cnt = x"FFFF" then
+            d_tmo <= '1';
+         end if;
+      end if;
+   end process p_dbg_ram;
+
+   p_dbg_hr : process (hr_clk_i)
+   begin
+      if rising_edge(hr_clk_i) then
+         if (hstate = H_RREQ or hstate = H_WBURST) and hr_waitrequest_i = '1' then
+            if d_wq_cnt(20) = '0' then d_wq_cnt <= d_wq_cnt + 1; else d_wq_stuck <= '1'; end if;
+         else
+            d_wq_cnt <= (others => '0');
+         end if;
+         if hstate = H_RDATA and hr_readdatavalid_i = '0' then
+            if d_rd_cnt(20) = '0' then d_rd_cnt <= d_rd_cnt + 1; else d_rd_stuck <= '1'; end if;
+         else
+            d_rd_cnt <= (others => '0');
+         end if;
+         if hstate = H_IDLE and c_rd_count /= 0 then
+            if d_id_cnt(20) = '0' then d_id_cnt <= d_id_cnt + 1; else d_id_stuck <= '1'; end if;
+         else
+            d_id_cnt <= (others => '0');
+         end if;
+         if (hstate = H_RDATA and hr_readdatavalid_i = '1' and h_beats = 1) or
+            (hstate = H_WBURST and hr_waitrequest_i = '0' and h_beats = 1) then
+            d_burst <= '1';
+         end if;
+      end if;
+   end process p_dbg_hr;
+
+   dbg_o <= d_tmo & d_id_stuck & d_rd_stuck & d_wq_stuck & hr_rst_i & d_burst & d_stuck & init_cnt(8);
 
 end architecture rtl;

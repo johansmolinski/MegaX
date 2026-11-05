@@ -4,7 +4,9 @@
 // model and through x68_hrmem with an Avalon HyperRAM model; every read's de words (addr_rc,
 // rddat) and the word after them must agree. The HyperRAM side leaves its reset 30 us after the
 // clk_ram side, so the first commands wait in the FIFO. Write data comes from a "cache RAM" with one
-// clock of latency on addr_wc, as in cachecont.
+// clock of latency on addr_wc, as in cachecont. With M2M (run.sh M2M=1) the Avalon side is the
+// framework's real arbiter and HyperRAM controller with a chip model and two more masters
+// (avl_m2m.sv) instead of avl_model.
 `timescale 1ps/1ps
 module tb_hrmem;
    localparam int NBLK = 12, NOPS = 4000;
@@ -97,9 +99,14 @@ module tb_hrmem;
       .busy_o(h_busy), .initdone_o(h_init),
       .hr_clk_i(hclk), .hr_rst_i(hr_rst), .hr_write_o(a_wr), .hr_read_o(a_rd), .hr_address_o(a_addr),
       .hr_writedata_o(a_wd), .hr_byteenable_o(a_be), .hr_burstcount_o(a_bc), .hr_readdata_i(a_rdd),
-      .hr_readdatavalid_i(a_val), .hr_waitrequest_i(a_wait));
+      .hr_readdatavalid_i(a_val), .hr_waitrequest_i(a_wait), .dbg_o());
+`ifdef M2M
+   avl_m2m u_m(.clk(hclk), .rst(hr_rst), .write(a_wr), .read(a_rd), .address(a_addr), .writedata(a_wd),
+      .byteenable(a_be), .burstcount(a_bc), .readdata(a_rdd), .readdatavalid(a_val), .waitrequest(a_wait));
+`else
    avl_model u_m(.clk(hclk), .write(a_wr), .read(a_rd), .address(a_addr), .writedata(a_wd),
       .byteenable(a_be), .burstcount(a_bc), .readdata(a_rdd), .readdatavalid(a_val), .waitrequest(a_wait));
+`endif
    always @(posedge clk) {h_we, h_wrdat} <= wdata(h_cur, (h_awc - h_b) & 255);
 
    ////////////////////////////////////////////////////////////////////////////////////////
@@ -214,7 +221,7 @@ module tb_hrmem;
       $display("tb_hrmem: %0d commands, %0d reads checked (%0d words); busy clocks SDRAMC %0d, x68_hrmem %0d",
                NOPS + NBLK, reads, words, s_busy_clk, h_busy_clk);
       $display("avalon: %0d read bursts (%0d words), %0d write bursts (%0d words)", u_m.n_rd, u_m.n_rw, u_m.n_wr, u_m.n_ww);
-      $display("errors: SDRAMC %0d, x68_hrmem %0d", errs_s, errs_h);
+      $display("errors: SDRAMC %0d, x68_hrmem %0d; x68_hrmem bring-up flags %b", errs_s, errs_h, u_h.dbg_o);
       if (errs_h == 0) $display("TB_HRMEM: PASS"); else $display("TB_HRMEM: FAIL");
       $finish;
    end

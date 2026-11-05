@@ -33,7 +33,10 @@ where `x68_hrmem` keeps it); `HOG=<period>,<length>` holds waitrequest `<length>
 `<period>` hr_clk clocks, ascal's share of the arbiter. Every run ends with memory timing
 statistics (`memory: ...`: per line the time from HCOMP to the end of the GVRAM reads, the
 68000's waits for memory); `ARGS="--memlog <ms>"` logs cachecont's commands, and a busy
-period of more than 50 us prints the last 32 commands.
+period of more than 50 us prints the last 32 commands. `--hw-reset <us>` applies the board's
+resets instead of the default ones (none before the boot ROM, then the Shell's reset from the end
+of the load for `<us>`; mega65.vhd, PREP_START); with `--slowload` instead of the preloaded ROM
+it is the board's start-up: `MEM_ARG="--slowload <boot.rom> --hw-reset 2000"`.
 
 ## How it is put together
 
@@ -126,6 +129,15 @@ cachecont's kinds (whole-block and partial reads with wrap, bwidth 7 and 8, writ
 with byte enables, refreshes, aborted reads); every read's words, column addresses and the word
 after them must agree; an Avalon HyperRAM model with random waits, gaps and ascal-like stretches;
 the HyperRAM side leaves reset 30 us late. `obj/vl/tb +verilator+seed+<n>` reruns another seed.
+`M2M=1 tb/hrmem/run.sh`: the Avalon side as on the board instead (`avl_m2m.sv`, `m2m_hr.vhd`):
+the framework's arbiter (`avm_arbit_general`, the scaler first) and the HyperRAM controller's
+logic (`hyperram_errata`, `hyperram_config`, `hyperram_ctrl`) synthesised by ghdl, the PHY and the
+chip modelled at the controller's `hb_*` lines (the clock leaves on `clk_del`: the chip takes the
+controller's word of clock t with the clock pulse of clock t+1), a QNICE-like master (single
+words) and a scaler-like master (128-word bursts), each checking its own data and reporting a
+hang with the arbiter's and the controller's state. Runs on the laptop (Verilator 5.032): the
+Fedora host's Verilator 5.046 runs `tb_hrmem` wrongly (all commands writes, no reads checked,
+seed 1 hangs in the old mode too), a Verilator difference not looked into.
 
 Vivado problems are narrowed down with out-of-context syntheses (`tools/synth/ooc.tcl`,
 `tools/synth/mkwrap.py` for a pass-through wrapper), about a minute each on the host.

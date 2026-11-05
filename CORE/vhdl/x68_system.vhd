@@ -136,6 +136,8 @@ port (
    dbg_bus        : out   std_logic_vector(47 downto 0);   -- the 68000's bus (x68_trace.vhd)
    dbg_opm        : out   std_logic_vector(15 downto 0);   -- the OPM bus wait (x68_trace.vhd)
    dbg_mem        : out   std_logic_vector(51 downto 0);   -- the SDRAM traffic (clk_ram)  -- R3 study (temporary, x68_r3probe.vhd)
+   dbg_hr         : out   std_logic_vector(8 downto 0);    -- R3 bring-up (sticky, the LEDs): 8 a loader
+                                                           -- byte waited 26 ms (clk_sys), 7..0 x68_hrmem's
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -195,6 +197,9 @@ architecture synthesis of x68_system is
    signal boot_active_d : std_logic := '0';
    signal started       : std_logic := '0';
    signal ldr_wr        : std_logic := '0';
+   signal ldr_wcnt      : unsigned(20 downto 0) := (others => '0');
+   signal ldr_stuck     : std_logic := '0';
+   signal xr_dbg        : std_logic_vector(7 downto 0);
    signal ldr_ack       : std_logic;
    signal ldr_ack_d     : std_logic := '0';
    signal ldr_done      : std_logic := '0';
@@ -301,11 +306,20 @@ begin
          if boot_active_d = '1' and boot_active = '0' then
             ldr_done <= '1';
          end if;
+         -- R3 bring-up: a byte not taken for 26 ms
+         if ldr_wr = '0' then
+            ldr_wcnt <= (others => '0');
+         elsif ldr_wcnt(20) = '0' then
+            ldr_wcnt <= ldr_wcnt + 1;
+         else
+            ldr_stuck <= '1';
+         end if;
       end if;
    end process p_loader;
 
    boot_wait <= ldr_wr;
    dbg_status <= locked & reset & core_rstn & ldr_done & started;
+   dbg_hr     <= ldr_stuck & xr_dbg;
    ldr_aen   <= boot_active and not ldr_done;
 
    -- X68000.sv's "reset": the external one, stretched by 65535 clocks after a
@@ -596,7 +610,8 @@ begin
          hr_burstcount_o    => hr_burstcount,
          hr_readdata_i      => hr_readdata,
          hr_readdatavalid_i => hr_readdatavalid,
-         hr_waitrequest_i   => hr_waitrequest
+         hr_waitrequest_i   => hr_waitrequest,
+         dbg_o              => xr_dbg
       );
    end generate G_HR;
 
@@ -613,6 +628,7 @@ begin
       xr_de         <= '0';
       xr_busy       <= '0';
       xr_initdone   <= '0';
+      xr_dbg        <= (others => '0');
    end generate G_NOHR;
 
    -- X68000.sv swaps the channels on purpose (pSndL => aud_r).
