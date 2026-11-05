@@ -707,3 +707,4 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - tb/sim `--hr-nogap` (read words back to back, no random waitrequest, as the framework's
   controller) and `--hr-lat <min>,<span>`: with no gaps and fixed latencies of 8, 15, 30 and 60
   clocks the IPL goes on past the fill (12808..14774 bus cycles at 150 ms). Not reproduced.
+- `megax-hr8` OK, WNS +0.050 ns, 35 critical warnings (as before, none on the new false path).
