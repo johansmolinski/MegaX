@@ -27,6 +27,10 @@
 // the X68000 only once the load has ended), then the Shell's CSR reset from the end of the load
 // for <us> microseconds (PREP_START holds it until the images are mounted again). Default: reset
 // for the first 25 us, none after the load.
+// --hr-reset <us>: the HyperRAM side's reset (hr_rst) held for <us> microseconds, as the board's
+// M2M reset holds it at power-on (the blue power LED: the framework, the Shell and the HyperRAM in
+// reset, the X68000's memory controller and video already running); the boot ROM load starts
+// 1 ms after it. Default: 2 us.
 //
 // Memory timing (x68_system's dbg_mem, the R3 probe's lines): per line the time from HCOMP to
 // the end of cachecont's last GVRAM read state (the plane caches must be filled before the next
@@ -41,7 +45,7 @@
 //            [--slowload <boot.rom>] [--trace <file.vcd> --trace-from <ms> --trace-to <ms>]
 //            [--bus <file> [--bus-from <ms>] [--bus-to <ms>] [--bus-data]]
 //            [--fd0 <image>] [--fd1 <image>] [--hr-rom <boot.rom>] [--hr-hog <period>,<length>]
-//            [--hw-reset <us>]
+//            [--hw-reset <us>] [--hr-reset <us>]
 //            [--save <file> --save-at <ms>] [--restore <file>] [+plusargs...]
 // Checkpoints (Verilator --savable): --save writes the model and the testbench state
 // at the first clk_sys edge at or after --save-at and runs on; --restore continues
@@ -146,6 +150,7 @@ int main(int argc, char** argv) {
    std::string hr_rom;
    double hw_reset_us = -1;          // --hw-reset: < 0 = the default resets
    double hw_reset_end = -1;         // fs
+   double hr_reset_us = 2;           // --hr-reset
    double memlog_ms = 0.0;                               // --memlog <ms>: cachecont's commands until then
    long hog_period = 0, hog_len = 0;
    for (int i = 1; i < argc; i++) {
@@ -171,6 +176,7 @@ int main(int argc, char** argv) {
       else if (a == "--memlog" && i + 1 < argc) memlog_ms = atof(argv[++i]);
       else if (a == "--hr-hog" && i + 1 < argc) sscanf(argv[++i], "%ld,%ld", &hog_period, &hog_len);
       else if (a == "--hw-reset" && i + 1 < argc) hw_reset_us = atof(argv[++i]);
+      else if (a == "--hr-reset" && i + 1 < argc) hr_reset_us = atof(argv[++i]);
    }
    HrModel hr;
    hr.hog_period = hog_period; hr.hog_len = hog_len;
@@ -347,7 +353,10 @@ int main(int argc, char** argv) {
                       (unsigned)top->hr_address, (unsigned)top->hr_burstcount);
             hr.rise(top->hr_write, top->hr_read, top->hr_address, top->hr_writedata,
                     top->hr_byteenable, top->hr_burstcount);
-            if (now > 2000000000ULL) top->hr_rst = 0;            // 2 us
+            if (top->hr_rst && (double)now > hr_reset_us * 1e9) {
+               top->hr_rst = 0;
+               if (hr_reset_us > 2) printf("[%8.3f ms] hr_rst released\n", now / 1e12);
+            }
          } else {
             top->hr_waitrequest = hr.wait;
             top->hr_readdatavalid = hr.valid;
@@ -445,7 +454,11 @@ int main(int argc, char** argv) {
          // loader (MiSTer's ioctl: one byte per write, wait while boot_wait)
          top->boot_wr = 0;
          switch (lstate) {
-         case L_RESET: if (sys_cycles == 2000) { top->boot_active = 1; lstate = L_START; } break;
+         case L_RESET:
+            if (sys_cycles >= 2000 && (hr_reset_us <= 2 || (double)now > (hr_reset_us + 1000) * 1e9)) {
+               top->boot_active = 1; lstate = L_START;
+            }
+            break;
          case L_START: lstate = rom.empty() ? L_END : L_SEND; break;
          case L_SEND:
             if (!top->boot_wait) {

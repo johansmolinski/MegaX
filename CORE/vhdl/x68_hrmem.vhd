@@ -16,7 +16,13 @@
 --   - a write takes the words bgnaddr .. endaddr (no wrap), each one clock after addr_wc
 --     pointed at it (cachecont's write data comes from block RAM), at least two: SDRAMC's write
 --     burst always writes the word after bgnaddr too;
---   - refrsh is answered at once (HyperRAM refreshes itself).
+--   - refrsh is answered at once (HyperRAM refreshes itself);
+--   - initdone only while the HyperRAM side is out of reset (hr_rst, synchronised): the M2M
+--     reset holds hr_rst at power-on (the blue power LED, tens of ms) while clk_ram already
+--     runs, and memcont, its GVRAM clear and the video start at initdone (megax-hr3 did not
+--     boot: the reads issued then timed out, their commands stayed in the FIFO and ran after
+--     the reset, and from then on every read got the words of the read four before it, the
+--     tags being two bits). A read does not time out while hr_rst is high either.
 -- Unlike SDRAMC, read words can come with gaps (de low, addr_rc and rddat held: the fast clear
 -- then writes the held word again), and a write is posted: busy drops once its words are in the
 -- FIFO; the HyperRAM side keeps the order of all commands.
@@ -155,6 +161,10 @@ architecture rtl of x68_hrmem is
    signal skip         : unsigned(11 downto 0) := (others => '0');   -- words of aborted reads still due
    signal r_skip_pop   : std_logic;
    signal init_cnt     : unsigned(8 downto 0) := (others => '0');
+   signal hrrst_s1     : std_logic := '1';                         -- hr_rst into clk_ram
+   signal hrrst_s2     : std_logic := '1';
+   attribute ASYNC_REG : string;
+   attribute ASYNC_REG of hrrst_s1, hrrst_s2 : signal is "TRUE";
    signal de_r         : std_logic := '0';
    signal addr_rc_r    : std_logic_vector(7 downto 0) := (others => '0');
    signal rddat_r      : std_logic_vector(15 downto 0) := (others => '0');
@@ -229,7 +239,7 @@ begin
    addr_rc_o  <= addr_rc_r;
    rddat_o    <= rddat_r;
    addr_wc_o  <= std_logic_vector(wc);
-   initdone_o <= init_cnt(8);
+   initdone_o <= init_cnt(8) and not hrrst_s2;
 
    -- read words: the head belongs to the read in progress, or it is stale (an aborted read,
    -- a reset): stale words go at once, in every state
@@ -261,9 +271,11 @@ begin
          if r_skip_pop = '1' then
             v_skip := v_skip - 1;
          end if;
-         c_wr_en <= '0';
-         w_wr_en <= '0';
-         de_r    <= '0';
+         c_wr_en  <= '0';
+         w_wr_en  <= '0';
+         de_r     <= '0';
+         hrrst_s1 <= hr_rst_i;
+         hrrst_s2 <= hrrst_s1;
 
          if init_cnt(8) = '0' then
             init_cnt <= init_cnt + 1;
@@ -328,6 +340,9 @@ begin
                   end if;
                elsif idle_cnt = x"FFFF" then
                   state <= S_IDLE;                              -- lost: never hang cachecont
+               end if;
+               if hrrst_s2 = '1' then
+                  idle_cnt <= (others => '0');                  -- its words come after the reset
                end if;
 
             when S_RLAST =>

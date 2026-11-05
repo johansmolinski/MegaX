@@ -36,7 +36,10 @@ statistics (`memory: ...`: per line the time from HCOMP to the end of the GVRAM 
 period of more than 50 us prints the last 32 commands. `--hw-reset <us>` applies the board's
 resets instead of the default ones (none before the boot ROM, then the Shell's reset from the end
 of the load for `<us>`; mega65.vhd, PREP_START); with `--slowload` instead of the preloaded ROM
-it is the board's start-up: `MEM_ARG="--slowload <boot.rom> --hw-reset 2000"`.
+it is the board's start-up: `MEM_ARG="--slowload <boot.rom> --hw-reset 2000 --hr-reset 60000"`.
+`--hr-reset <us>` holds the HyperRAM side's reset (hr_rst) that long (default 2 us) and starts
+the load 1 ms after it: at power-on the M2M reset (the blue power LED) holds hr_rst, the Shell and
+QNICE, while the X68000's memory controller and video already run.
 
 ## How it is put together
 

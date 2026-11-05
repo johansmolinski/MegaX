@@ -658,3 +658,27 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   the hierarchy); with `NO_REF_SYNTH=1` (implementation still incremental) OK, WNS +0.102 ns.
   tb/sim: the self-test passes (flags 0205) and the machine boots after it; a copy with a
   mutated expectation reports the errors (0605). Neither build loaded yet.
+
+## 2026-11-05 megax-hr5 on the R6: the self-test ran while the HyperRAM was in reset; megax-hr6
+
+- `megax-hr5` on the R6: still no boot. Power LED blue, then green (the boot ROM is in, the
+  68000 runs); drive LED blinking magenta (the self-test timed out); the Help key opens the menu
+  (the Shell is alive).
+- Wrong in the entry above: hr_rst does not follow only the reset button. At power-on the M2M
+  reset (reset_manager, the blue power LED) holds hr_rst (clk_m2m: `qnice_locked and sys_rstn_i
+  and core_rstn_i`) together with QNICE, while clk_ram runs and x68_hrmem, x68_hrtest and memcont
+  are out of reset (they follow `locked`; X68K_top's mem_rstn is plllock, vid_rstn plllock and
+  ram_inidone). x68_hrmem's initdone came 256 clocks after `locked`, so the self-test, then
+  memcont (its GVRAM clear, the video) started with the HyperRAM side still in reset; a read
+  then times out after 65536 clocks and its command stays in the FIFO.
+- tb/sim `--hr-reset <us>` (new; the default 2 us was the old behaviour): with 60 ms the old
+  x68_hrmem gives the board's result, flags 0a47 (the self-test timed out, commands waited in
+  H_IDLE), but the machine still boots (IPL's mode 5 at 325 ms, 182 ms after the Shell's reset,
+  as before). So the reset explains hr5's self-test result, not the failure to boot; the test
+  said nothing about the HyperRAM.
+- Fix (x68_hrmem): hr_rst synchronised into clk_ram (hrrst_s1/s2, ASYNC_REG, CORE.xdc
+  max_delay); initdone only while it is low, and a read does not time out while it is high.
+  With 60 ms: memcont starts at 60.27 ms, the self-test passes (0205), mode 5 at 325 ms.
+  tb/hrmem: 5 seeds and 3 with M2M=1 pass.
+- `megax-hr6` = hr5 + the fix (REF megax-hr5, NO_REF_SYNTH=1): its self-test now runs on the
+  working HyperRAM, so its result on the drive LED means something.
