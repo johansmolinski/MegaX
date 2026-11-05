@@ -754,3 +754,4 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   (before the fix), mode 5 at 182.075 ms in both. `megax-s1`: the SDRAM build (X68_HRMEM false)
   with the fix, for the board (0.1 = megax-zr has the same latent cacheext bug, its placement
   happened to work).
+- `megax-s1` OK, WNS +0.092 ns, WHS +0.022 ns, 19 critical warnings (the SDRAM configuration; the HyperRAM-only constraints are not among them). Not loaded yet.
