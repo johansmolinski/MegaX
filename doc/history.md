@@ -750,3 +750,7 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   to cacheext's srclk (X68000.sdc's) found no cells; the toggle that replaced it is an ordinary
   clk_sys -> clk_ram path and met timing, so the constraint is removed (no effect on hr10's
   bitstream). Not loaded yet (the user asleep).
+- tb/sim SDRAM build (FD0=gvtest, 1.2 s) with the cacheext fix: 57 frames identical to sd-gv3
+  (before the fix), mode 5 at 182.075 ms in both. `megax-s1`: the SDRAM build (X68_HRMEM false)
+  with the fix, for the board (0.1 = megax-zr has the same latent cacheext bug, its placement
+  happened to work).
