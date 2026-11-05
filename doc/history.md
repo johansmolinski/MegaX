@@ -686,3 +686,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   2.5 ns); everything else met (+0.102 ns). The new constraint had no `-from` ("set_max_delay
   -datapath_only requires -from to be non-empty", critical warning, dropped); now `-from
   [get_clocks hr_clk]`. `megax-hr7` = hr6 with that (REF megax-hr6).
+- `megax-hr7` OK, WNS +0.000 ns (a GVRAM_CTRL fill_row -> plane RAM address path, met), WHS
+  +0.025 ns; no warning on the new constraint, 35 critical warnings as hr5 (the known ones).
+  Not loaded yet.
