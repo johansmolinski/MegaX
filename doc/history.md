@@ -723,3 +723,4 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   `tools/hrstate.py --raw` decodes tb/sim's dump (tb/sim prints it at the end). In tb/sim at
   150 ms six reads were aborted during their words (SDRAMC also takes abort only in its data
   phase). Build `megax-hr9`.
+- `megax-hr9` OK, WNS +0.000 ns (gpal -> LBUFWD, met), 35 critical warnings as before.
