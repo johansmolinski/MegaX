@@ -704,3 +704,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - Debug window (temporary): x68_hrmem's `dbgx_o` (both state machines, FIFO counts, counters,
   the last read) and memcont's dbg_mem, QNICE device 0x0110 window 5 (mega65.vhd p_hrx, false
   path), `tools/hrstate.py`. Build `megax-hr8` (REF megax-hr7, NO_REF_SYNTH=1).
+- tb/sim `--hr-nogap` (read words back to back, no random waitrequest, as the framework's
+  controller) and `--hr-lat <min>,<span>`: with no gaps and fixed latencies of 8, 15, 30 and 60
+  clocks the IPL goes on past the fill (12808..14774 bus cycles at 150 ms). Not reproduced.

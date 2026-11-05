@@ -20,7 +20,8 @@
 // as an Avalon slave on hr_clk (100 MHz), 4M words: read latency 15..29 clocks, now and then a
 // gap between read words, a random waitrequest, and with --hr-hog <period>,<length> (hr_clk
 // clocks) waitrequest held for <length> of every <period> clocks, as ascal's bursts take the
-// arbiter first. --hr-rom <boot.rom> preloads the boot ROM where x68_hrmem keeps it (HyperRAM
+// arbiter first. --hr-lat <min>,<span>: read latency <min> + random(<span>) clocks; --hr-nogap:
+// read words back to back and no random waitrequest (as the framework's controller). --hr-rom <boot.rom> preloads the boot ROM where x68_hrmem keeps it (HyperRAM
 // word 0x180000 = the SDRAM's 0x780000). Checkpoints do not cover the HyperRAM model.
 //
 // --hw-reset <us>: the board's resets (mega65.vhd): none before the boot ROM (the M2M resets reach
@@ -92,6 +93,8 @@ struct HrModel {
    bool wait = true, valid = false;
    uint16_t data = 0;
    long cyc = 0, hog_period = 0, hog_len = 0;
+   int lat_min = 15, lat_span = 15;  // --hr-lat <min>,<span>
+   bool nogap = false;               // --hr-nogap: no gaps between read words, no random waitrequest
    long n_rd = 0, n_wr = 0, w_rd = 0, w_wr = 0, c_wait_core = 0, c_busy = 0;
    uint32_t rnd() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
    // a rising edge of hr_clk: the handshakes of the cycle that ends (before the model sees it)
@@ -99,7 +102,7 @@ struct HrModel {
       cyc++;
       if ((read || write) && wait) c_wait_core++;
       if (!wait && read) {
-         rd_addr = addr & 0x3FFFFF; rd_pend = bc; rd_lat = 15 + rnd() % 15; n_rd++;
+         rd_addr = addr & 0x3FFFFF; rd_pend = bc; rd_lat = lat_min + (lat_span ? rnd() % lat_span : 0); n_rd++;
       }
       if (!wait && write) {
          if (wr_left == 0) { wr_addr = addr & 0x3FFFFF; wr_left = bc; n_wr++; }
@@ -112,12 +115,12 @@ struct HrModel {
       valid = false;
       if (rd_pend) {
          if (rd_lat) rd_lat--;
-         else if (rnd() % 16) {
+         else if (nogap || rnd() % 16) {
             valid = true; data = mem[rd_addr]; rd_addr = (rd_addr + 1) & 0x3FFFFF; rd_pend--; w_rd++;
          }
       }
       bool hog = hog_period && (cyc % hog_period) < hog_len;
-      wait = rd_pend || hog || rnd() % 4 == 0;
+      wait = rd_pend || hog || (!nogap && rnd() % 4 == 0);
       if (rd_pend || wr_left || hog) c_busy++;
    }
 };
@@ -153,6 +156,8 @@ int main(int argc, char** argv) {
    double hr_reset_us = 2;           // --hr-reset
    double memlog_ms = 0.0;                               // --memlog <ms>: cachecont's commands until then
    long hog_period = 0, hog_len = 0;
+   int hr_lat_min = 15, hr_lat_span = 15;
+   bool hr_nogap = false;
    for (int i = 1; i < argc; i++) {
       std::string a = argv[i];
       if (a == "--ms" && i + 1 < argc) ms_total = atof(argv[++i]);
@@ -175,11 +180,14 @@ int main(int argc, char** argv) {
       else if (a == "--hr-rom" && i + 1 < argc) hr_rom = argv[++i];
       else if (a == "--memlog" && i + 1 < argc) memlog_ms = atof(argv[++i]);
       else if (a == "--hr-hog" && i + 1 < argc) sscanf(argv[++i], "%ld,%ld", &hog_period, &hog_len);
+      else if (a == "--hr-lat" && i + 1 < argc) sscanf(argv[++i], "%d,%d", &hr_lat_min, &hr_lat_span);
+      else if (a == "--hr-nogap") hr_nogap = true;
       else if (a == "--hw-reset" && i + 1 < argc) hw_reset_us = atof(argv[++i]);
       else if (a == "--hr-reset" && i + 1 < argc) hr_reset_us = atof(argv[++i]);
    }
    HrModel hr;
    hr.hog_period = hog_period; hr.hog_len = hog_len;
+   hr.lat_min = hr_lat_min; hr.lat_span = hr_lat_span; hr.nogap = hr_nogap;
    if (!hr_rom.empty()) {
       FILE* f = fopen(hr_rom.c_str(), "rb");
       if (!f) { fprintf(stderr, "cannot open %s\n", hr_rom.c_str()); return 1; }
