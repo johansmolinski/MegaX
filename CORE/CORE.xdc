@@ -130,3 +130,7 @@ set_max_delay -datapath_only 8.0 -from [get_clocks clk_ram] -to [get_cells -quie
 set_max_delay -datapath_only 8.0 -from [get_cells -quiet -hierarchical -filter {NAME =~ *i_hrmem/i_*/ram_reg*}]
 ## hr_rst into clk_ram (x68_hrmem's hrrst_s1/s2, ASYNC_REG): initdone waits for the HyperRAM side.
 set_max_delay -datapath_only 8.0 -from [get_clocks hr_clk] -to [get_cells -quiet -hierarchical -filter {NAME =~ *i_hrmem/hrrst_s1_reg*}]
+
+## R3 bring-up (temporary): x68_hrmem's state and memcont's command, sampled as they are into
+## qnice_clk for the debug window 5 (mega65.vhd p_hrx; read while they stand still).
+set_false_path -to [get_cells -quiet -hierarchical -filter {NAME =~ *qnice_hrx*_reg*}]

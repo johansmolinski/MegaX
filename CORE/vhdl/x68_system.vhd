@@ -139,6 +139,7 @@ port (
    dbg_hr         : out   std_logic_vector(12 downto 0);   -- R3 bring-up (sticky, the LEDs): 12..9
                                                            -- x68_hrtest's result, 8 a loader byte waited
                                                            -- 26 ms (clk_sys), 7..0 x68_hrmem's flags
+   dbg_hrx        : out   std_logic_vector(511 downto 0);  -- R3 bring-up: x68_hrmem's state (dbgx_o)
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -671,7 +672,8 @@ begin
          hr_readdata_i      => hr_readdata,
          hr_readdatavalid_i => hr_readdatavalid,
          hr_waitrequest_i   => hr_waitrequest,
-         dbg_o              => xr_dbg
+         dbg_o              => xr_dbg,
+         dbgx_o             => dbg_hrx
       );
    end generate G_HR;
 
@@ -689,6 +691,7 @@ begin
       xr_busy       <= '0';
       xr_initdone   <= '0';
       xr_dbg        <= (others => '0');
+      dbg_hrx       <= (others => '0');
       ht_result     <= (others => '0');
    end generate G_NOHR;
 

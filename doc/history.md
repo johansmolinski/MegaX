@@ -689,3 +689,18 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - `megax-hr7` OK, WNS +0.000 ns (a GVRAM_CTRL fill_row -> plane RAM address path, met), WHS
   +0.025 ns; no warning on the new constraint, 35 critical warnings as hr5 (the known ones).
   Not loaded yet.
+- `megax-hr7` on the R6 (20:32): power LED green, drive LED off (self-test passed, no flag),
+  HDMI horizontal stripes flickering (new: before, the bars), VGA black, the menu opens. Bus
+  trace (`tools/trace.py`): 4390 bus cycles in all, the last the IPL's copy loop at FF004E
+  (longwords FF1Bxx.. -> 0x0484..) reading FF1DFE; dbg_opm: AS low, a read pending, srstn and
+  cpu_rstn high. The 68000 waits for the read of FF1E00. tb/sim (60 ms hr_rst, --bus): bus
+  cycle 4390 is the same read of FF1DFE, cycle 4391 FF1E00 at 145.150 ms, the CPU read fill
+  addrh 7f8f bgn 00 end 00 bwidth 7 (HyperRAM 0x1f8f00: bursts of 64, 64, then 1 word), the
+  seventh fill since the reset; the six before it worked on the board too. A CSR reset of the
+  X68000 (`trace.py --arm 000001 --reset`): 4391 more cycles (8781), the same stop. So the board
+  runs cycle for cycle as tb/sim up to that fill, and it is deterministic. x68_hrmem shows no
+  flag (not busy, no read timeout), so either the fill never reached it or cachecont did not
+  take its answer.
+- Debug window (temporary): x68_hrmem's `dbgx_o` (both state machines, FIFO counts, counters,
+  the last read) and memcont's dbg_mem, QNICE device 0x0110 window 5 (mega65.vhd p_hrx, false
+  path), `tools/hrstate.py`. Build `megax-hr8` (REF megax-hr7, NO_REF_SYNTH=1).

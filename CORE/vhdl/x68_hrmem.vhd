@@ -93,7 +93,10 @@ entity x68_hrmem is
       -- waited 10 ms in the FIFO with the HyperRAM side idle, 5 a read waited 10 ms for its
       -- words, 4 waitrequest held 10 ms, 3 hr_rst (live), 2 a burst has completed, 1 busy
       -- 13 ms without a break, 0 initdone (live)
-      dbg_o               : out std_logic_vector(7 downto 0)
+      dbg_o               : out std_logic_vector(7 downto 0);
+      -- the bring-up state (temporary, QNICE device C_DEV_X68_DEBUG window 5, tools/hrstate.py):
+      -- words 0..15 the clk_ram side, 16..31 the hr_clk side (see p_dbgx_*)
+      dbgx_o              : out std_logic_vector(511 downto 0)
    );
 end entity x68_hrmem;
 
@@ -205,6 +208,17 @@ architecture rtl of x68_hrmem is
    signal d_rd_stuck   : std_logic := '0';
    signal d_id_stuck   : std_logic := '0';
    signal d_burst      : std_logic := '0';
+
+   -- the bring-up state (dbgx_o)
+   type t_w16 is array (natural range <>) of std_logic_vector(15 downto 0);
+   signal x_ram        : t_w16(0 to 15) := (others => (others => '0'));
+   signal x_hr         : t_w16(0 to 15) := (others => (others => '0'));
+   signal x_nrd, x_nrdone, x_nabort, x_ntmo, x_nwr : unsigned(15 downto 0) := (others => '0');
+   signal x_lrd_addrh  : std_logic_vector(15 downto 0) := (others => '0');
+   signal x_lrd_be     : std_logic_vector(15 downto 0) := (others => '0');
+   signal x_lrd_bw     : std_logic_vector(3 downto 0) := (others => '0');
+   signal x_ndew       : unsigned(15 downto 0) := (others => '0');
+   signal x_hcmd, x_hrdw, x_hbst, x_hwrw : unsigned(15 downto 0) := (others => '0');
 
 begin
 
@@ -579,6 +593,92 @@ begin
          end if;
       end if;
    end process p_dbg_hr;
+
+   -- the bring-up state: counters and the live state of both sides
+   p_dbgx_ram : process (clk_i)
+   begin
+      if rising_edge(clk_i) then
+         if state = S_IDLE and rd_i = '1' then
+            x_nrd       <= x_nrd + 1;
+            x_lrd_addrh <= addr_high_i;
+            x_lrd_be    <= bgnaddr_i & endaddr_i;
+            x_lrd_bw    <= bwidth_i;
+         end if;
+         if state = S_IDLE and rd_i = '0' and wr_i = '1' then
+            x_nwr <= x_nwr + 1;
+         end if;
+         if state = S_RLAST and r_head_ok = '1' then
+            x_nrdone <= x_nrdone + 1;
+         end if;
+         if state = S_RDATA and abort_i = '1' then
+            x_nabort <= x_nabort + 1;
+         end if;
+         if state = S_RDATA and abort_i = '0' and r_take = '0' and idle_cnt = x"FFFF" then
+            x_ntmo <= x_ntmo + 1;
+         end if;
+         if de_r = '1' then
+            x_ndew <= x_ndew + 1;
+         end if;
+         x_ram(0)  <= std_logic_vector(to_unsigned(t_state'pos(state), 4)) & hrrst_s2 & rd_i & wr_i &
+                      refrsh_i & abort_i & init_cnt(8) & std_logic_vector(tag) & std_logic_vector(wtag) &
+                      de_r & cap_on;
+         x_ram(1)  <= "0000000" & std_logic_vector(cnt);
+         x_ram(2)  <= "0000000" & std_logic_vector(l_m);
+         x_ram(3)  <= "0000000" & std_logic_vector(l_n);
+         x_ram(4)  <= "0000" & std_logic_vector(skip);
+         x_ram(5)  <= "00" & std_logic_vector(c_wr_free) & std_logic_vector(r_rd_count);
+         x_ram(6)  <= "000000" & std_logic_vector(w_wr_free);
+         x_ram(7)  <= std_logic_vector(idle_cnt);
+         x_ram(8)  <= std_logic_vector(x_nrd);
+         x_ram(9)  <= std_logic_vector(x_nrdone);
+         x_ram(10) <= std_logic_vector(x_nabort);
+         x_ram(11) <= std_logic_vector(x_ntmo);
+         x_ram(12) <= std_logic_vector(x_nwr);
+         x_ram(13) <= x_lrd_addrh;
+         x_ram(14) <= x_lrd_be;
+         x_ram(15) <= x_lrd_bw & std_logic_vector(x_ndew(11 downto 0));
+      end if;
+   end process p_dbgx_ram;
+
+   p_dbgx_hr : process (hr_clk_i)
+   begin
+      if rising_edge(hr_clk_i) then
+         if hstate = H_IDLE and c_rd_count /= 0 and c_rd_en = '0' and hr_rst_i = '0' then
+            x_hcmd <= x_hcmd + 1;
+         end if;
+         if hstate = H_RDATA and hr_readdatavalid_i = '1' then
+            x_hrdw <= x_hrdw + 1;
+         end if;
+         if hstate = H_WBURST and hr_waitrequest_i = '0' then
+            x_hwrw <= x_hwrw + 1;
+         end if;
+         if (hstate = H_RREQ or hstate = H_WBURST) and hr_waitrequest_i = '0' then
+            x_hbst <= x_hbst + 1;
+         end if;
+         x_hr(0)  <= std_logic_vector(to_unsigned(t_hstate'pos(hstate), 4)) & h_tag & h_wr & h_prep &
+                     hr_rst_i & hr_waitrequest_i & hr_readdatavalid_i & h_read & h_write & "000";
+         x_hr(1)  <= "0000000" & std_logic_vector(h_left);
+         x_hr(2)  <= "0000000" & std_logic_vector(h_beats);
+         x_hr(3)  <= "0000000" & std_logic_vector(h_len);
+         x_hr(4)  <= std_logic_vector(h_addr(15 downto 0));
+         x_hr(5)  <= std_logic_vector(h_mask) & "00" & std_logic_vector(h_addr(21 downto 16));
+         x_hr(6)  <= "00000000000" & std_logic_vector(c_rd_count);
+         x_hr(7)  <= "000000" & std_logic_vector(w_rd_count);
+         x_hr(8)  <= "0000000" & std_logic_vector(r_wr_free);
+         x_hr(9)  <= std_logic_vector(x_hcmd);
+         x_hr(10) <= std_logic_vector(x_hrdw);
+         x_hr(11) <= std_logic_vector(x_hwrw);
+         x_hr(12) <= std_logic_vector(x_hbst);
+         x_hr(13) <= c_rd_data(41 downto 26);
+         x_hr(14) <= c_rd_data(25 downto 10);
+         x_hr(15) <= "000000" & c_rd_data(9 downto 0);
+      end if;
+   end process p_dbgx_hr;
+
+   g_dbgx : for i in 0 to 15 generate
+      dbgx_o(16 * i + 15 downto 16 * i)         <= x_ram(i);
+      dbgx_o(256 + 16 * i + 15 downto 256 + 16 * i) <= x_hr(i);
+   end generate g_dbgx;
 
    dbg_o <= d_tmo & d_id_stuck & d_rd_stuck & d_wq_stuck & hr_rst_i & d_burst & d_stuck & init_cnt(8);
 

@@ -372,6 +372,10 @@ signal main_fd_motor          : std_logic;
 signal main_boot_ended_d      : std_logic := '0';
 signal main_dbg_status        : std_logic_vector(5 downto 0);
 signal main_dbg_hr            : std_logic_vector(12 downto 0);  -- R3 bring-up flags (clk_ram, hr_clk, clk_sys)
+signal main_dbg_hrx           : std_logic_vector(511 downto 0); -- R3 bring-up: x68_hrmem's state (clk_ram, hr_clk)
+type t_hrx_words is array (0 to 31) of std_logic_vector(15 downto 0);
+signal qnice_hrx              : t_hrx_words;                    -- ... and memcont's command, in qnice_clk
+signal qnice_hrx_mem          : std_logic_vector(51 downto 0);
 signal main_dbg_hr_s          : std_logic_vector(12 downto 0);  -- ... in main_clk
 signal main_blink             : unsigned(24 downto 0) := (others => '0');
 signal main_drive_col_hr      : std_logic_vector(23 downto 0);
@@ -787,6 +791,7 @@ begin
          dbg_opm_o            => main_dbg_opm,
          dbg_mem_o            => main_dbg_mem,
          dbg_hr_o             => main_dbg_hr,
+         dbg_hrx_o            => main_dbg_hrx,
          hr_clk_i             => hr_clk_i,
          hr_rst_i             => hr_rst_i,
          hr_write_o           => main_hr_write,
@@ -866,6 +871,18 @@ begin
    -- Core specific device handling (QNICE clock domain)
    ---------------------------------------------------------------------------------------------
 
+   -- R3 bring-up (temporary): x68_hrmem's state and memcont's command sampled into qnice_clk
+   -- (window 5 below; CORE.xdc: false path to these registers)
+   p_hrx : process (qnice_clk_i)
+   begin
+      if rising_edge(qnice_clk_i) then
+         for i in 0 to 31 loop
+            qnice_hrx(i) <= main_dbg_hrx(16 * i + 15 downto 16 * i);
+         end loop;
+         qnice_hrx_mem <= main_dbg_mem;
+      end if;
+   end process p_hrx;
+
    core_specific_devices : process (all)
    begin
       qnice_dev_data_o <= x"EEEE";
@@ -891,6 +908,21 @@ begin
             qnice_dev_data_o <= qnice_dbg_data;
             if qnice_dev_addr_i(27 downto 12) = x"0004" then   -- R3 study (temporary)
                qnice_dev_data_o <= qnice_r3_data;
+            end if;
+            -- R3 bring-up (temporary): window 5, words 0..31 x68_hrmem's state (dbgx_o), 32..35
+            -- memcont's current command (dbg_mem); sampled as they are (CORE.xdc: false path), read
+            -- them twice (tools/hrstate.py)
+            if qnice_dev_addr_i(27 downto 12) = x"0005" then
+               if qnice_dev_addr_i(5) = '0' then
+                  qnice_dev_data_o <= qnice_hrx(to_integer(unsigned(qnice_dev_addr_i(4 downto 0))));
+               else
+                  case qnice_dev_addr_i(1 downto 0) is
+                     when "00"   => qnice_dev_data_o <= qnice_hrx_mem(15 downto 0);
+                     when "01"   => qnice_dev_data_o <= qnice_hrx_mem(31 downto 16);
+                     when "10"   => qnice_dev_data_o <= qnice_hrx_mem(47 downto 32);
+                     when others => qnice_dev_data_o <= x"000" & qnice_hrx_mem(51 downto 48);
+                  end case;
+               end if;
             end if;
 
          -- the disk images: device 0x0101 + slot
