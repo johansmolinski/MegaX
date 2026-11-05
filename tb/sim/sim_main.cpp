@@ -660,6 +660,9 @@ int main(int argc, char** argv) {
       printf("HyperRAM: %ld read bursts (%ld words), %ld write bursts (%ld words); busy %.1f %% of the time "
              "(hog included), the core's requests waited %ld clocks\n", hr.n_rd, hr.w_rd, hr.n_wr, hr.w_wr,
              100.0 * hr.c_busy / (hr.cyc ? hr.cyc : 1), hr.c_wait_core);
+   // x68_system dbg_hr (HRMEM): 12..9 x68_hrtest (lanes, timeout, errors, done), 8 loader stuck,
+   // 7..0 x68_hrmem's flags (mega65.vhd shows them on the LEDs)
+   printf("bring-up flags %04x\n", (unsigned)top->dbg_hr);
    printf("[%8.3f ms] end, %ld frames\n", now / 1e12, frame_no);
    delete top;
    delete ctx;

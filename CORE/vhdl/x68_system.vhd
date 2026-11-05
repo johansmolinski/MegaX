@@ -136,8 +136,9 @@ port (
    dbg_bus        : out   std_logic_vector(47 downto 0);   -- the 68000's bus (x68_trace.vhd)
    dbg_opm        : out   std_logic_vector(15 downto 0);   -- the OPM bus wait (x68_trace.vhd)
    dbg_mem        : out   std_logic_vector(51 downto 0);   -- the SDRAM traffic (clk_ram)  -- R3 study (temporary, x68_r3probe.vhd)
-   dbg_hr         : out   std_logic_vector(8 downto 0);    -- R3 bring-up (sticky, the LEDs): 8 a loader
-                                                           -- byte waited 26 ms (clk_sys), 7..0 x68_hrmem's
+   dbg_hr         : out   std_logic_vector(12 downto 0);   -- R3 bring-up (sticky, the LEDs): 12..9
+                                                           -- x68_hrtest's result, 8 a loader byte waited
+                                                           -- 26 ms (clk_sys), 7..0 x68_hrmem's flags
 
    -- PS/2 keyboard, as hps_io's PS/2 device on the MiSTer (X68000.sv): point to point, the
    -- device's clock and data into the core, the core's (host) clock and data out to the device
@@ -179,6 +180,24 @@ architecture synthesis of x68_system is
    signal xr_de        : std_logic;
    signal xr_busy      : std_logic;
    signal xr_initdone  : std_logic;
+   -- between x68_hrtest and x68_hrmem (R3 bring-up, temporary)
+   signal ht_addrh     : std_logic_vector(15 downto 0);
+   signal ht_bgn       : std_logic_vector(7 downto 0);
+   signal ht_end       : std_logic_vector(7 downto 0);
+   signal ht_bwidth    : std_logic_vector(3 downto 0);
+   signal ht_wrdat     : std_logic_vector(15 downto 0);
+   signal ht_we        : std_logic_vector(1 downto 0);
+   signal ht_rd        : std_logic;
+   signal ht_wr        : std_logic;
+   signal ht_refrsh    : std_logic;
+   signal ht_abort     : std_logic;
+   signal ht_addr_rc   : std_logic_vector(7 downto 0);
+   signal ht_addr_wc   : std_logic_vector(7 downto 0);
+   signal ht_rddat     : std_logic_vector(15 downto 0);
+   signal ht_de        : std_logic;
+   signal ht_busy      : std_logic;
+   signal ht_initdone  : std_logic;
+   signal ht_result    : std_logic_vector(3 downto 0);
 
    -- clock enables (X68000.sv)
    signal div_sys      : unsigned(1 downto 0) := (others => '0');
@@ -319,7 +338,7 @@ begin
 
    boot_wait <= ldr_wr;
    dbg_status <= locked & reset & core_rstn & ldr_done & started;
-   dbg_hr     <= ldr_stuck & xr_dbg;
+   dbg_hr     <= ht_result & ldr_stuck & xr_dbg;
    ldr_aen   <= boot_active and not ldr_done;
 
    -- X68000.sv's "reset": the external one, stretched by 65535 clocks after a
@@ -580,26 +599,67 @@ begin
    vis_mem <= "0100" when G_HRMEM else "0000";
 
    G_HR : if G_HRMEM generate
+      -- R3 bring-up (temporary): the memory path tests itself before memcont gets it
+      i_hrtest : entity work.x68_hrtest
+      port map (
+         clk_i        => clk_ram,
+         rstn_i       => locked,
+         m_addrh_i    => xr_addrh,
+         m_bgn_i      => xr_bgn,
+         m_end_i      => xr_end,
+         m_bwidth_i   => xr_bwidth,
+         m_wrdat_i    => xr_wrdat,
+         m_we_i       => xr_we,
+         m_rd_i       => xr_rd,
+         m_wr_i       => xr_wr,
+         m_refrsh_i   => xr_refrsh,
+         m_abort_i    => xr_abort,
+         m_addr_rc_o  => xr_addr_rc,
+         m_addr_wc_o  => xr_addr_wc,
+         m_rddat_o    => xr_rddat,
+         m_de_o       => xr_de,
+         m_busy_o     => xr_busy,
+         m_initdone_o => xr_initdone,
+         x_addrh_o    => ht_addrh,
+         x_bgn_o      => ht_bgn,
+         x_end_o      => ht_end,
+         x_bwidth_o   => ht_bwidth,
+         x_wrdat_o    => ht_wrdat,
+         x_we_o       => ht_we,
+         x_rd_o       => ht_rd,
+         x_wr_o       => ht_wr,
+         x_refrsh_o   => ht_refrsh,
+         x_abort_o    => ht_abort,
+         x_addr_rc_i  => ht_addr_rc,
+         x_addr_wc_i  => ht_addr_wc,
+         x_rddat_i    => ht_rddat,
+         x_de_i       => ht_de,
+         x_busy_i     => ht_busy,
+         x_initdone_i => ht_initdone,
+         result_o     => ht_result,
+         err_o        => open
+      );
+
       i_hrmem : entity work.x68_hrmem
       port map (
          clk_i              => clk_ram,
          rstn_i             => locked,
-         addr_high_i        => xr_addrh,
-         bgnaddr_i          => xr_bgn,
-         endaddr_i          => xr_end,
-         bwidth_i           => xr_bwidth,
-         addr_rc_o          => xr_addr_rc,
-         addr_wc_o          => xr_addr_wc,
-         rddat_o            => xr_rddat,
-         wrdat_i            => xr_wrdat,
-         de_o               => xr_de,
-         we_i               => xr_we,
-         rd_i               => xr_rd,
-         wr_i               => xr_wr,
-         refrsh_i           => xr_refrsh,
-         abort_i            => xr_abort,
-         busy_o             => xr_busy,
-         initdone_o         => xr_initdone,
+         addr_high_i        => ht_addrh,
+         bgnaddr_i          => ht_bgn,
+         endaddr_i          => ht_end,
+         bwidth_i           => ht_bwidth,
+         addr_rc_o          => ht_addr_rc,
+         addr_wc_o          => ht_addr_wc,
+         rddat_o            => ht_rddat,
+         wrdat_i            => ht_wrdat,
+         de_o               => ht_de,
+         we_i               => ht_we,
+         rd_i               => ht_rd,
+         wr_i               => ht_wr,
+         refrsh_i           => ht_refrsh,
+         abort_i            => ht_abort,
+         busy_o             => ht_busy,
+         initdone_o         => ht_initdone,
          hr_clk_i           => hr_clk,
          hr_rst_i           => hr_rst,
          hr_write_o         => hr_write,
@@ -629,6 +689,7 @@ begin
       xr_busy       <= '0';
       xr_initdone   <= '0';
       xr_dbg        <= (others => '0');
+      ht_result     <= (others => '0');
    end generate G_NOHR;
 
    -- X68000.sv swaps the channels on purpose (pSndL => aud_r).

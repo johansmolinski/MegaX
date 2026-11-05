@@ -371,8 +371,10 @@ signal main_x68_reset         : std_logic := '1';
 signal main_fd_motor          : std_logic;
 signal main_boot_ended_d      : std_logic := '0';
 signal main_dbg_status        : std_logic_vector(5 downto 0);
-signal main_dbg_hr            : std_logic_vector(8 downto 0);   -- R3 bring-up flags (clk_ram, hr_clk, clk_sys)
-signal main_dbg_hr_s          : std_logic_vector(8 downto 0);   -- ... in main_clk
+signal main_dbg_hr            : std_logic_vector(12 downto 0);  -- R3 bring-up flags (clk_ram, hr_clk, clk_sys)
+signal main_dbg_hr_s          : std_logic_vector(12 downto 0);  -- ... in main_clk
+signal main_blink             : unsigned(24 downto 0) := (others => '0');
+signal main_drive_col_hr      : std_logic_vector(23 downto 0);
 signal main_dbg_scan          : std_logic_vector(7 downto 0);
 signal main_dbg_bus           : std_logic_vector(47 downto 0);
 signal main_dbg_opm           : std_logic_vector(15 downto 0);
@@ -665,17 +667,20 @@ begin
    -- R3 bring-up (X68_HRMEM, temporary): the start-up as colours, readable with the Shell frozen
    -- (x68_boot stalls QNICE while the core takes no bytes). Power LED: white = no boot ROM byte
    -- yet, magenta = loading, red = a byte waited 26 ms (the load hangs), yellow = loaded, the
-   -- Shell holds the X68000 in reset, green = the 68000 runs. Drive LED (sticky, the first that
-   -- happened in this order): red = commands waited 10 ms with the HyperRAM side idle, magenta =
-   -- waitrequest held 10 ms, cyan = read words missing for 10 ms, blue = a read timed out,
-   -- orange = busy 13 ms without a break, white = no burst completed (yet); else yellow with a
-   -- floppy motor, off.
+   -- Shell holds the X68000 in reset, green = the 68000 runs. Drive LED, first the HyperRAM
+   -- self-test (x68_hrtest, before the machine gets the memory), blinking: red = wrong data,
+   -- yellow = wrong data in bytes the masked writes left alone (byte enables), magenta = a
+   -- command hung, white = still running. Then steady (sticky, the first that happened in this
+   -- order): red = commands waited 10 ms with the HyperRAM side idle, magenta = waitrequest
+   -- held 10 ms, cyan = read words missing for 10 ms, blue = a read timed out, orange = busy
+   -- 13 ms without a break, white = no burst completed (yet); else yellow with a floppy motor,
+   -- off.
    i_dbg_hr_cdc : xpm_cdc_array_single
       generic map (
          DEST_SYNC_FF   => 2,
          INIT_SYNC_FF   => 1,
          SRC_INPUT_REG  => 0,
-         WIDTH          => 9
+         WIDTH          => 13
       )
       port map (
          src_clk  => '0',
@@ -692,8 +697,23 @@ begin
                            x"FF00FF" when main_dbg_status(1) = '0' else
                            x"FFFF00" when main_dbg_status(3) = '1' else
                            x"00FF00";
+   p_blink : process (main_clk)
+   begin
+      if rising_edge(main_clk) then
+         main_blink <= main_blink + 1;
+      end if;
+   end process p_blink;
+
    main_drive_led_o     <= '1' when X68_HRMEM else main_fd_motor;
    main_drive_led_col_o <= x"FFFF00" when not X68_HRMEM else
+                           x"000000" when main_blink(24) = '1' and
+                                          (main_dbg_hr_s(9) = '0' or main_dbg_hr_s(10) = '1' or
+                                           main_dbg_hr_s(11) = '1') else
+                           main_drive_col_hr;
+   main_drive_col_hr    <= x"FF00FF" when main_dbg_hr_s(11) = '1' else
+                           x"FFFF00" when main_dbg_hr_s(12) = '1' else
+                           x"FF0000" when main_dbg_hr_s(10) = '1' else
+                           x"FFFFFF" when main_dbg_hr_s(9) = '0' else
                            x"FF0000" when main_dbg_hr_s(6) = '1' else
                            x"FF00FF" when main_dbg_hr_s(4) = '1' else
                            x"00FFFF" when main_dbg_hr_s(5) = '1' else

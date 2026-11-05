@@ -621,3 +621,35 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   (non-incremental) OK, WNS +0.103 ns**, block RAM 327.5 tiles, crossings +2.5/+3.0 ns under
   their 8 ns bound. **`megax-hr3` (the reset fix, incremental from hr2) OK, WNS +0.103 ns**: the
   build for the first try on the R6 (not yet loaded; the user's go-ahead first).
+
+## 2026-11-05 R3 step 2 on the R6: megax-hr3 does not boot
+
+- **`megax-hr3` on the R6 (the user, JTAG): no boot.** HDMI keeps the colour bars it shows while
+  the bitstream loads (normally black once the X68000 starts), nothing more happens. The bars
+  stay until the IPL programs the CRTC (before that the core sends no frames for ascal to
+  write), so either the 68000 never ran or it ran and lost itself before its video set-up.
+  A load the core does not take freezes the Shell without a message (x68_boot holds QNICE with
+  qnice_wait while its FIFO is full); a load taken but not ended would say "The X68000 did not
+  take /megax/boot.rom".
+- What simulation now rules out:
+  - the boot ROM through the real loader byte by byte into the HyperRAM path (tb/sim
+    `--slowload`, HRMEM=1): loaded at 81 ms, the IPL's video mode at 264 ms;
+  - the board's resets (tb/sim `--hw-reset 2000`, new: none before the boot ROM, as
+    mega65.vhd gates the M2M resets with boot_ended, then the Shell's reset from the end of the
+    load, PREP_START): both builds boot the same way (ROM at 81 ms, mode at 265 ms);
+  - the framework's own arbiter and HyperRAM controller instead of the Avalon model (tb/hrmem
+    `M2M=1`, new: avm_arbit_general with the scaler first, hyperram_errata, hyperram_config,
+    hyperram_ctrl synthesised by ghdl, the PHY and the chip modelled at the `hb_*` lines, a
+    QNICE-like and a scaler-like master checking their own data): 30 seeds pass, nobody hangs;
+  - the hr_rst deadlock idea: the HyperRAM reset follows only the reset button (reset_manager),
+    not the Shell's core reset;
+  - the memory map: the R6's HyperRAM is one 8 MB part (MiSTer2MEGA65 wiki); ascal uses 1 MB
+    (16bpp, triple buffering and its framebuffer mode off);
+  - crossings: report_cdc on hr3's routed design shows only the FIFOs' structures (RAM reads,
+    Gray pointers), nothing else between clk_ram and hr_clk.
+- tb/hrmem on the Fedora host's Verilator 5.046 runs wrongly (every command a write, no reads
+  checked; seed 1 hangs in the old mode too); on the laptop (5.032) as before. Not looked into.
+- The next try is diagnostic: `megax-hr4` (LED flags, OK WNS +0.103 ns) and `megax-hr5` (hr4 +
+  `x68_hrtest.vhd`, a self-test of the HyperRAM path before memcont gets it: 24 blocks of 256
+  words, a full write, a byte-masked write, a read-back). The LEDs (X68_HRMEM only, mega65.vhd)
+  show the start-up stage (power LED) and the memory path (drive LED) with the Shell frozen.

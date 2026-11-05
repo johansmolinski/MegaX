@@ -100,7 +100,7 @@ entity main is
       dbg_bus_o               : out   std_logic_vector(47 downto 0);  -- x68_trace.vhd
       dbg_opm_o               : out   std_logic_vector(15 downto 0);  -- x68_trace.vhd
       dbg_mem_o               : out   std_logic_vector(51 downto 0);  -- R3 study (temporary, x68_r3probe.vhd)
-      dbg_hr_o                : out   std_logic_vector(8 downto 0);   -- R3 bring-up flags (x68_system dbg_hr)
+      dbg_hr_o                : out   std_logic_vector(12 downto 0);   -- R3 bring-up flags (x68_system dbg_hr)
 
       -- the HyperRAM arbiter's core port (hr_clk), used with G_HRMEM
       hr_clk_i                : in    std_logic;

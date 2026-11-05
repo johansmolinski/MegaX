@@ -113,6 +113,7 @@ vhdl X68000_MiSTerMEGA65/rtl/mega65/x68k_rams.vhd
 vhdl vhdl/tvram_bram.vhd
 vhdl vhdl/x68_afifo.vhd
 vhdl vhdl/x68_hrmem.vhd
+vhdl vhdl/x68_hrtest.vhd
 vhdl vhdl/x68_system.vhd
 sv X68000_MiSTerMEGA65/rtl/FX68K/fx68kAlu.sv
 sv X68000_MiSTerMEGA65/rtl/FX68K/fx68k.sv
