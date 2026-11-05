@@ -746,3 +746,7 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   registers and counts its changes; rd waits one or two clk_ram clocks longer after a clear.
   tb/sim HRMEM=1 with the board's resets: the same boot (mode 5 at 325.200 ms, flags 0205).
 - `megax-hr10` = hr9 + the fix (REF megax-hr9).
+- `megax-hr10` OK, WNS +0.107 ns, WHS +0.025 ns. Two new critical warnings: CORE.xdc's false path
+  to cacheext's srclk (X68000.sdc's) found no cells; the toggle that replaced it is an ordinary
+  clk_sys -> clk_ram path and met timing, so the constraint is removed (no effect on hr10's
+  bitstream). Not loaded yet (the user asleep).

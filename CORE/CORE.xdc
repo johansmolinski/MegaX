@@ -55,12 +55,11 @@ set_multicycle_path 2 -setup -end -from [get_clocks main_clk] -to $MPU
 set_multicycle_path 1 -hold  -end -from [get_clocks main_clk] -to $MPU
 
 ## X68000.sdc: the contrast register is static for the video; BG RAM writes are on sys_ce;
-## vidcont's address to the cache controller has two clocks; cacheext's srclk is not timed;
-## the YM3802's interpolator advances every four clocks
+## vidcont's address to the cache controller has two clocks; the YM3802's interpolator advances
+## every four clocks
 set_false_path -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/cont/contval*}]
-## cacheext samples its CPU-side clock (clk_sys) as data (srclk, an edge detector on the clk_ram
-## side): X68000.sdc's false path; megax-e failed hold on the 16 read-cache blocks without it
-set_false_path -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/RAM/CACHEC/*/srclk_reg*}]
+## (cacheext's srclk false path, X68000.sdc's, is gone with srclk: since fork be44860 cacheext
+## counts clk_sys's edges through a toggle, an ordinary clk_sys -> clk_ram path, timed)
 set_multicycle_path 2 -setup -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
 set_multicycle_path 1 -hold  -end -from [get_clocks main_clk] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/spmem/bgv*}]
 set_multicycle_path 2 -setup -end -from [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/vc/vaddr*}] -to [get_cells -hierarchical -filter {IS_SEQUENTIAL && NAME =~ CORE/i_main/i_x68_system/i_core/RAM/CACHEC/*}]
