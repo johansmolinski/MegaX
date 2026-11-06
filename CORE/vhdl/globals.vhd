@@ -75,6 +75,11 @@ constant ASCAL_16BPP          : boolean := true;
 -- R3 board, built and tried on the R6 first. The machine then has 4 MB of main RAM.
 constant X68_HRMEM            : boolean := false;
 
+-- The R3 study's probe (x68_r3probe.vhd, temporary): with X68_HRMEM false, mirror every SDRAM
+-- command into the HyperRAM and measure it. Off: its HyperRAM traffic disturbs the scaler (HDMI
+-- snow, 2026-11-04 and megax-s1); the counters keep running, the mirror never reaches the port.
+constant X68_R3PROBE          : boolean := false;
+
 -- The X68000's 31 kHz modes need no scandoubler; the analog output takes the picture as it is
 -- (mega65.vhd: qnice_scandoubler_o = '0'). The plain line doubler stays selected for later 15 kHz
 -- modes (phase 4).

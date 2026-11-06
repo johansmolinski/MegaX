@@ -467,19 +467,24 @@ begin
    ---------------------------------------------------------------------------------------------
 
    -- the core's HyperRAM port: the core's memory with X68_HRMEM (x68_hrmem in x68_system),
-   -- otherwise x68_r3probe's mirror (the R3 study, temporary; before it: hr_core_write_o <= '0';
-   -- hr_core_read_o <= '0'; address, writedata, byteenable and burstcount (others => '0')).
-   -- The other one sees a port that never answers.
-   hr_core_write_o        <= main_hr_write      when X68_HRMEM else probe_hr_write;
-   hr_core_read_o         <= main_hr_read       when X68_HRMEM else probe_hr_read;
-   hr_core_address_o      <= main_hr_address    when X68_HRMEM else probe_hr_address;
-   hr_core_writedata_o    <= main_hr_writedata  when X68_HRMEM else probe_hr_writedata;
-   hr_core_byteenable_o   <= main_hr_byteenable when X68_HRMEM else probe_hr_byteenable;
-   hr_core_burstcount_o   <= main_hr_burstcount when X68_HRMEM else probe_hr_burstcount;
+   -- x68_r3probe's mirror with X68_R3PROBE (the R3 study, temporary), otherwise idle as before
+   -- them. Whoever does not have it sees a port that never answers.
+   hr_core_write_o        <= main_hr_write      when X68_HRMEM else
+                             probe_hr_write     when X68_R3PROBE else '0';
+   hr_core_read_o         <= main_hr_read       when X68_HRMEM else
+                             probe_hr_read      when X68_R3PROBE else '0';
+   hr_core_address_o      <= main_hr_address    when X68_HRMEM else
+                             probe_hr_address   when X68_R3PROBE else (others => '0');
+   hr_core_writedata_o    <= main_hr_writedata  when X68_HRMEM else
+                             probe_hr_writedata when X68_R3PROBE else (others => '0');
+   hr_core_byteenable_o   <= main_hr_byteenable when X68_HRMEM else
+                             probe_hr_byteenable when X68_R3PROBE else (others => '0');
+   hr_core_burstcount_o   <= main_hr_burstcount when X68_HRMEM else
+                             probe_hr_burstcount when X68_R3PROBE else (others => '0');
    main_hr_waitrequest    <= hr_core_waitrequest_i   when X68_HRMEM else '1';
    main_hr_readdatavalid  <= hr_core_readdatavalid_i when X68_HRMEM else '0';
-   probe_hr_waitrequest   <= '1' when X68_HRMEM else hr_core_waitrequest_i;
-   probe_hr_readdatavalid <= '0' when X68_HRMEM else hr_core_readdatavalid_i;
+   probe_hr_waitrequest   <= hr_core_waitrequest_i   when X68_R3PROBE and not X68_HRMEM else '1';
+   probe_hr_readdatavalid <= hr_core_readdatavalid_i when X68_R3PROBE and not X68_HRMEM else '0';
 
    -- M2M-UPSTREAM rtg-framebuffer: off (ascal shows the core's picture)
    fb_ena_o             <= '0';

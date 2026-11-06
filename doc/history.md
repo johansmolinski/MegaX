@@ -788,3 +788,10 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   fails it: "QNICE held for ever"); PASS.
 - `megax-hr12` = hr11 + the x68_boot fix (REF megax-hr10); `megax-s2` = s1 + the cachecont tag fix
   + the x68_boot fix (REF megax-s1).
+- `megax-s1` loaded (the user): boots from the HDS, no illegal instruction (the cachecont tag
+  window did not hit the SDRAM timing there); VGA fine, a bit of snow on HDMI. The snow is
+  x68_r3probe's mirror (every SDRAM command copied into the HyperRAM next to ascal; the same snow
+  in the R3 measurement, 2026-11-04; 0.1 had no probe). `globals.vhd` `X68_R3PROBE` (new, false):
+  the probe's counters stay, its mirror no longer reaches the framework's core port, which is
+  idle again in the SDRAM builds as before the study.
+- `megax-s3` = s2 + X68_R3PROBE false (REF megax-s1).
