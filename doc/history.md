@@ -929,3 +929,4 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   waiting 4.0 %; the frames are the SDRAM reference's except frame 1, the first half-frame after
   the mode switch (512x513, blank), whose sum follows the start's timing (hog-base, 16 blocks, has
   a third value). No difference that matters.
+- `megax-hr19` = hr18 + the drive LED change (REF megax-hr18): the HyperRAM baseline.
