@@ -823,3 +823,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   identical to sd-gv3; HRMEM gvtest with the board's resets, mode 5 at 245 ms, flags 0205, the
   same (blank) frames shifted by the later start.
 - `megax-s3` on the board (the user): no HDMI snow, boots from the HDS, the long reset works.
+- `megax-hr13` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (as hr7..12); the build tree
+  has the addr_wc fix. Not loaded yet.
