@@ -1074,3 +1074,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   40..120, HOG 300,200), `hr-mt5` (both), memtest, 2.4 s.
 - The user: the R3 runs the 68000 at 20 MHz (turbo); the drive LED does not blink after a load
   (x68_hrtest passes on the R3A).
+- tb/sim `hr-mt3` (turbo, HOG 300,140), `hr-mt4` (HyperRAM latency 40..120, HOG 300,200),
+  `hr-mt5` (both), memtest, 2.4 s: **all three boot memtest** (CRTMOD 16 at 1540 / 1969 / 1551 ms;
+  no pass finished by 2.4 s). The shift is not reproduced at 20 MHz or with a slower model either.
