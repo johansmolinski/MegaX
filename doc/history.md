@@ -1007,3 +1007,8 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   constraints (lines 99-111, no SDRAM ports on R3) and the midi multicycle, the SD hosts' IOB
   output enables and the pblock as on s7; x68_hrmem's crossing constraints all found.
   md5 d03f57b9658ff256d7633c691c9691a2. Not loaded yet.
+- `megax-r3b` on the user's R3 board (an R3A, 2026-11-06), loaded by JTAG: the first load stopped
+  at "/megax/boot.rom: File not found or file read error" (the card mounted, the open failed;
+  the cards had just been moved over from the R6, error code not noted); the second load of the
+  same bitstream **boots**. To watch: if it comes back, record the firmware's UART log (slot, SD
+  mode, error code).
