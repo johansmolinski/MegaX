@@ -1012,3 +1012,12 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   the cards had just been moved over from the R6, error code not noted); the second load of the
   same bitstream **boots**. To watch: if it comes back, record the firmware's UART log (slot, SD
   mode, error code).
+- `megax-r3b` (the user): boots Human68k to the file manager; **Super Street Fighter II stops while
+  loading**: "Address error has occurred (SR=$0000:PC=$0000861C)", after its drivers (TYPE5
+  PROTECT EMULATOR, N3, PCM8A, SP2.X patch) and title text. SSF2 loaded on hr17/hr18 (R6).
+  Debug window at the error box: x68_hrmem running, 0 reads timed out, cachecont in a fill. The
+  ROM in HyperRAM read through QMON (windows 180/1A0/1C0/1E0/1F0/1F4/1F6/1F8/1FB/1FF, 40960
+  words): 0 differences from boot.rom, so no data lost at rest. Main RAM at $8600 (HR window 204):
+  Human68k's DOS call exit intact (`movem.l (sp)+,d0-a6; tst.b $1C14; bne; btst #7,(sp); bne.s;
+  rte` at $8618-$861E): the rte took an odd return address from the supervisor stack, a word the
+  68000 had written that came back wrong (a write/read path error, not the code).
