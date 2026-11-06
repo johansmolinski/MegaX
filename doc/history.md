@@ -930,3 +930,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   the mode switch (512x513, blank), whose sum follows the start's timing (hog-base, 16 blocks, has
   a third value). No difference that matters.
 - `megax-hr19` = hr18 + the drive LED change (REF megax-hr18): the HyperRAM baseline.
+- `megax-hr19` OK, WNS +0.043 ns, WHS +0.025 ns, 35 critical warnings (32 blocks and the drive LED
+  change in the tree). Not loaded yet.
