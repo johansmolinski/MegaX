@@ -1032,3 +1032,10 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   the rest of the line is code (`7016 4E4F ...` from $76080); `4A69 4A69` is `tst.w $4A69(a1)`, an
   odd address. One word doubled and then one word repeated over a 64-word run: the data of a
   write, not bit errors (the ROM still reads back clean); the HyperRAM itself holds the bad words.
+- memtest.xdf in FD0 (no SxSI driver, no SRAM image): the IPL does not boot it and ends in its
+  ROM "X68000 terminal V1.0" ($FFF000, the fallback when no device boots). Main RAM at $2000
+  (HR window 201) holds the boot sector **shifted by one word**: RAM word n = sector word n-1 over
+  the whole sector ($2000 = 0000, $2002 = 600E, ...), so the IPL found no BRA. The pattern fits
+  every write burst (16 words) writing the previous word first: [stale, w0..w14], the stale word
+  being the previous burst's last one. The doubled `4800 4800` in the file manager crash fits too.
+  The ROM (written by x68_boot through the same path at power-on) reads back clean.
