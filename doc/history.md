@@ -1039,3 +1039,11 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   every write burst (16 words) writing the previous word first: [stale, w0..w14], the stale word
   being the previous burst's last one. The doubled `4800 4800` in the file manager crash fits too.
   The ROM (written by x68_boot through the same path at power-on) reads back clean.
+- Correction (2026-11-06): the tb/sim gvtest runs of today and before (`sd-tag`, `sd-ab`, `sd-fc`,
+  `hr32`, 1.2 s) never reached gvtest: the IPL reads a floppy's boot sector only after ~1.8 s of
+  machine time (2026-10-27), and every frame of those runs is black (0 lit). Their "identical
+  frames" compared the IPL's start-up only; the fast clear (sd-fc) and the 32 blocks (hr32) were not
+  exercised by gvtest. Runs that must boot a floppy need MS >= ~2500.
+- tb/sim `hr-mt` (HRMEM, memtest in FD0, HOG 300,140, 900 ms) and `sd-mt` (SDRAM): both black, too
+  short for the same reason. `hr-mt2`: the same to 2.6 s, to see whether the HyperRAM path loads the
+  boot sector shifted in simulation too.
