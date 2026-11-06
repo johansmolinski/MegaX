@@ -955,3 +955,16 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   later in white (the HDS distribution's loading screen, then the SHARP logo as white/dotted
   ghosts on the next screen). Not yet looked at.
 - `megax-hr21` loaded (the user's OK).
+- `megax-hr21` on the board (the user): **short and long resets boot**, everything else as hr19,
+  no HDS logo ghosts. The ghosts are on every s build and not on 0.1 (megax-zr); the user thinks
+  hr17 removed them in the HyperRAM builds.
+- The ghosts, a cause in upstream cachecont: a CPU miss during a read fill aborts the fill (a
+  one-clock `ramabort`), clears the block and marks it `aborted`; the next fill takes that block
+  without clearing it, under its own line's tag. But the block kept taking the controller's words
+  while RAM_STATE stayed ST_BREAD: SDRAMC delivers one or two more after the abort (state 5's de
+  holds through state 6), and all of them when the pulse falls outside its read loop (clkstate 5
+  is the only state that looks at abort). Those words of the old line were then present in the
+  new line's block: the 68000 read stale data. x68_hrmem since hr17 stops its words in the clock
+  it sees the abort (and before hr17 delivered a different number), so the HyperRAM builds hit it
+  differently. Fork 4f35ac4: no block writes (brcache_extwr, brwr) while `aborted`. tb/sim
+  `sd-ab` (gvtest, SDRAM, 1.2 s) against `sd-tag`; `megax-s6` (the SDRAM build with the fix).
