@@ -923,3 +923,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   build after megax-hr18.
 - `megax-hr18` OK, WNS +0.083 ns, WHS +0.025 ns, 35 critical warnings; block RAM 343.5 of 365
   tiles (+16, the 16 more blocks). Not loaded yet.
+- `megax-hr18` on the board (the user): about hr17's speed, perhaps a little faster; the
+  background glitches mostly gone at 20 MHz, a little better at 10 MHz.
