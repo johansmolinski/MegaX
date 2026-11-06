@@ -95,6 +95,13 @@ architecture synthesis of hyperram_ctrl is
    signal   waitreq_r   : std_logic;
    signal   cut_read    : std_logic := '0';
 
+   -- M2M-UPSTREAM hr-reset-pulse (MegaX 2026-11-06): RESET# low only for the first clocks of a
+   -- reset (tRP is 200 ns), not for as long as rst_i stays high: the device refreshes itself only
+   -- while RESET# is high, and a long press of the reset button held it low for seconds, long
+   -- enough for some of the HyperRAM's cells to lose their contents
+   constant C_RST_PULSE : integer := 50;      -- 500 ns at 100 MHz
+   signal   rst_count   : integer range 0 to C_RST_PULSE := 0;
+
 begin
 
    fsm_proc : process (clk_i)
@@ -268,7 +275,12 @@ begin
          if rst_i = '1' then
             waitreq_r         <= '1';
             state             <= INIT_ST;
-            hb_rstn_o         <= '0';
+            -- M2M-UPSTREAM hr-reset-pulse: was hb_rstn_o <= '0' for the whole reset
+            -- hb_rstn_o         <= '0';
+            if rst_count /= C_RST_PULSE then
+               hb_rstn_o      <= '0';
+               rst_count      <= rst_count + 1;
+            end if;
             hb_ck_ddr_o       <= (others => '0');
             hb_csn_o          <= '1';
             hb_dq_oe_o        <= '0';
@@ -276,6 +288,8 @@ begin
             count_long        <= (others => '0');
             count_short       <= (others => '0');
             cut_read          <= '0';
+         else
+            rst_count         <= 0;           -- M2M-UPSTREAM hr-reset-pulse
          end if;
       end if;
    end process fsm_proc;

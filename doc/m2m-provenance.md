@@ -87,6 +87,14 @@ Rules:
   resets (HDMI showed only vertical bars: the watchdog restarting ascal on stale lines), so
   something else still cuts write bursts short. `megax-zj` cut 6 write bursts in 20+ resets,
   none of them a black HDMI.
+- **hr-reset-pulse** (2026-11-06; `vhdl/controllers/hyperram/hyperram_ctrl.vhd`): RESET# low for
+  the first 50 clocks (500 ns, tRP is 200 ns) of a reset only, then high again while `rst_i` stays
+  high (before: low for the whole reset). Why: the framework resets the HyperRAM with every core
+  reset, and the device refreshes itself only while RESET# is high; a long press of the reset
+  button held it low for seconds and the cells lost charge. MegaX with its memory in the
+  HyperRAM (X68_HRMEM) loads the IPL ROM once per power-on: after a long press the ROM had 8-18
+  flipped bits per 4096 words and the IPL looped in `_TVCTRL` (`megax-hr19`). tb/hrmem (M2M=1)
+  fails when RESET# stays low for more than 1 us.
 - **ascal-read-watchdog** (2026-11-02; `vhdl/av_pipeline/ascal.vhd`): a read watchdog in
   Scalaire: a whole output frame without a readack, a readdataack or an idle read pipeline
   restarts the read pipeline at the VS (o_state, o_copy, readlev, copylev, fload). Why: while

@@ -932,3 +932,18 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - `megax-hr19` = hr18 + the drive LED change (REF megax-hr18): the HyperRAM baseline.
 - `megax-hr19` OK, WNS +0.043 ns, WHS +0.025 ns, 35 critical warnings (32 blocks and the drive LED
   change in the tree). Not loaded yet.
+- `megax-hr19` on the board (the user): drive LED off after resets; **after a long reset nothing
+  boots** (power LED blue, then green). (hr14's long reset was perhaps only seen to turn the LED
+  green.) Debug window: the 68000 runs in the IPL, in `_TVCTRL` ($FF6268, the TV-on code at
+  start-up) for ever: `tools/trace.py --arm FF050E` (its return) and `FF0508` (its call) never
+  fire. The IPL ROM in the HyperRAM compared with boot.rom (QMON, windows 0x1F0/0x1F8/0x1FB/0x1FF):
+  8-18 words of 4096 differ by one bit, both directions ($FF626C `0A42` -> `8A42`: the routine's
+  `eori` becomes another instruction and it never ends). Cause: the framework resets the HyperRAM
+  with every core reset and its controller held RESET# low for the whole reset; the device
+  refreshes itself only while RESET# is high, and a long press keeps the reset for seconds.
+  x68_boot loads the ROM once per power-on, so the decayed ROM stays. A short press is
+  a few ms: no loss (all short resets so far booted).
+- M2M-UPSTREAM **hr-reset-pulse** (`hyperram_ctrl.vhd`): RESET# low for the first 500 ns of a reset
+  only. tb/hrmem (M2M=1, +hrrst=4): PASS, RESET# low 51 clocks at most; the old controller 3482
+  (the check, now fatal at 1 us, caught it). In `megax-hr20` (REF megax-hr19). To get a good ROM
+  back after the hr19 test: switch the MEGA65 off and on.

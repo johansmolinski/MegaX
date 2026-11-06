@@ -41,6 +41,19 @@ module avl_m2m (
    assign readdatavalid = s_rdv[1];
    assign waitrequest   = s_wait[1];
 
+   // RESET# (M2M-UPSTREAM hr-reset-pulse): the device refreshes itself only while RESET# is high,
+   // so RESET# must not stay low for long (on the board a long press of the reset button held it
+   // low for seconds and the IPL ROM lost bits, megax-hr19); 1 us here is far beyond tRP (200 ns)
+   int rstn_low = 0, rstn_low_max = 0;
+   always @(posedge clk) begin
+      if (!hb_rstn) begin
+         rstn_low <= rstn_low + 1;
+         if (rstn_low + 1 > rstn_low_max) rstn_low_max <= rstn_low + 1;
+         if (rstn_low == 100) $fatal(1, "avl_m2m: RESET# low for more than 1 us");
+      end else rstn_low <= 0;
+   end
+   final $display("avl_m2m: RESET# low for at most %0d clocks", rstn_low_max);
+
    // the core port's statistics (as avl_model)
    int n_rd = 0, n_wr = 0, n_rw = 0, n_ww = 0;
    int c_wleft = 0;
