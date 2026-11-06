@@ -905,3 +905,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   fills in 1.84 us in the 768-dot modes.
 - `megax-hr17` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (the drop and its constraint
   in the tree). Not loaded yet.
+- `megax-hr17` on the board (the user): SSF2 at 20 MHz **much faster, the background glitches
+  mostly gone**; still a few missing or flashing lines in some background blocks. megax-s5 (0.1.1,
+  SDRAM) loaded for comparison.
