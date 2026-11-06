@@ -122,6 +122,7 @@ print("  sb_wr %d sb_rmw %d  cpbusy %d  vid_hazard %d  cpu_dirty_hazard %d  bwca
          bits(u, 7, 7), bits(u, 6, 6), bits(u, 5, 4), bits(u, 3, 0)))
 print("  sb_addr %06x  b_addr %06x  bwaddr_sel %05x  refcount %d  vidcount %d"
       % (w(66) | w(67) << 16, w(68) | w(69) << 16, w(70) | w(71) << 16, w(74) >> 8, w(74) & 3))
+print("  fills whose b_addr line was not sb_addr's (megax-hr11 on) %d" % w(72))
 print("  read blocks (tag = word address >> 7; mask, rdb, ext = the word at b_addr present):")
 for i in range(16):
     lo, hi = w(80 + 2 * i), w(81 + 2 * i)

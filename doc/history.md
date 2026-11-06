@@ -755,3 +755,26 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   with the fix, for the board (0.1 = megax-zr has the same latent cacheext bug, its placement
   happened to work).
 - `megax-s1` OK, WNS +0.092 ns, WHS +0.022 ns, 19 critical warnings (the SDRAM configuration; the HyperRAM-only constraints are not among them). Not loaded yet.
+
+## 2026-11-06 megax-hr10 boots Human68k from the HDS; a crash at the disk boot: cache tags from b_addr
+
+- `megax-hr10` loaded (the user's OK): the HyperRAM build boots, picture on HDMI and VGA, the IPL
+  loads the ROM, the SxSI driver starts, then at the disk boot, every time at the same place:
+  "Illegal instruction executed (SR=$2011:PC=$49564958)". $49564958 is "IVIX" in ASCII: text
+  taken as a return or jump address, corrupted memory.
+- Window 5 (tools/hrstate.py) at the error: no read timed out; 46425 of 48449 reads aborted
+  (16-bit counters; the 68000 gets its word first and moves on while the 128-word fill still
+  runs, far more often than on the SDRAM); and read blocks 5 and 12 both tagged with line
+  0x400 (bytes $800-$8FF, the system work area). braddr is written only at reset, by the
+  write-back invalidation and the abort (sb_addr's line, or none) and at a fill start, which
+  needs braddrnone (sb_addr's line in no block) but tagged the block with **b_addr's** line
+  while it read sb_addr's (ramaddrh, rambgnaddr). So a duplicate means a fill whose b_addr line
+  was already cached and whose sb_addr line was not: the block got one line's words under
+  another line's tag. sb_addr is b_addr through two clk_ram registers (taken only when stable),
+  and b_addr can change under a held b_rd: abus switches between the 68000 and the DMAC
+  (`dma_bconte`), and the crash comes with the first disk DMA. The SDRAM builds have the same
+  window; the HyperRAM's timing (posted writes, early aborts) hits it.
+- Fix (fork 7eda3fd, cachecont, both fill branches): the tag is sb_addr's line. If b_addr has
+  moved on, its line simply misses and gets its own fill afterwards. cachecont dbg2_o word 8
+  (temporary) counts fills where the two lines differed (tools/hrstate.py prints it).
+- `megax-hr11` = hr10 + the fix (REF megax-hr10).
