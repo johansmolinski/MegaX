@@ -1025,3 +1025,10 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   4f35ac4 and the vidcont fast clear 69e7140), built from a worktree (~/megax-work/src-r3c) for an
   A/B against r3b on SSF2. OK, WNS +0.115 ns, WHS +0.036 ns, 23 critical warnings (as r3b).
   md5 65e1e3c0ddd5e9fe0925e5a665fe63f5. Not loaded yet.
+- `megax-r3c` loaded (the user's OK): **crashes too**, already in the file manager (LHES, while
+  scanning D:/Fighting): "Address error (SR=$2000:PC=$0007605A)". So not the two ghost fixes.
+  hrstate: x68_hrmem running, 0 reads timed out. Main RAM in HyperRAM (window 23B) at the crash:
+  the first 64 words of the 128-word line at $76000 are `C6DB 4800 4800` and then `4A69` 61 times,
+  the rest of the line is code (`7016 4E4F ...` from $76080); `4A69 4A69` is `tst.w $4A69(a1)`, an
+  odd address. One word doubled and then one word repeated over a 64-word run: the data of a
+  write, not bit errors (the ROM still reads back clean); the HyperRAM itself holds the bad words.
