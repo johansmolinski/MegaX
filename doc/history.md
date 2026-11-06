@@ -981,3 +981,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   and hr17+ not showing it. MAME's x68k_crtc clears on bit 1 = 1 and a later 0 does not undo it.
   Fork (vidcont): the stop and the cancel removed, a requested clear always runs its frame
   (`gclrend` unused). tb/sim `sd-fc` (gvtest) against `sd-ab`; `megax-s7` = s6 + this.
+- tb/sim `sd-fc` (gvtest: its _G_CLR_ON runs a fast clear): every frame as `sd-ab`, the same memory
+  statistics (no stop write during its clear). `megax-s7` OK, WNS +0.035 ns, WHS +0.022 ns, 20
+  critical warnings (as s6). Not loaded yet.
