@@ -903,3 +903,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   HyperRAM's fixed cost per burst (~20 clocks) is paid for 16 words: a 512-word GVRAM line takes
   ~12 us. The snow limit is ascal's input buffer: two bursts of 128 bytes (i_dpram BLEN*2), one
   fills in 1.84 us in the 768-dot modes.
+- `megax-hr17` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (the drop and its constraint
+  in the tree). Not loaded yet.
