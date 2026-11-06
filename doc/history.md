@@ -925,3 +925,7 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   tiles (+16, the 16 more blocks). Not loaded yet.
 - `megax-hr18` on the board (the user): about hr17's speed, perhaps a little faster; the
   background glitches mostly gone at 20 MHz, a little better at 10 MHz.
+- tb/sim `hr32` (32 blocks, gvtest, --hr-hog 300,140, 1.2 s): mode 5 at 247 ms, flags 0205, 68000
+  waiting 4.0 %; the frames are the SDRAM reference's except frame 1, the first half-frame after
+  the mode switch (512x513, blank), whose sum follows the start's timing (hog-base, 16 blocks, has
+  a third value). No difference that matters.
