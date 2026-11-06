@@ -908,3 +908,11 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - `megax-hr17` on the board (the user): SSF2 at 20 MHz **much faster, the background glitches
   mostly gone**; still a few missing or flashing lines in some background blocks. megax-s5 (0.1.1,
   SDRAM) loaded for comparison.
+- `megax-s5` (the user): no slowdown, no missing lines; hr17 "pretty close now". hr17 at 10 MHz:
+  the background glitches worse and slower than s5. So the glitches follow the CPU's speed (the
+  game updating the background as it is shown, late), not late GVRAM line reads: the remaining gap
+  is the CPU's miss cost. The probe (hr15): about one CPU read in ten is a fill.
+- Fork: cachecont gets 32 read blocks (8 KB, BRBLOCKS from X68K_top: 32 with EXT_RAMC, 16 as
+  before in the SDRAM build); each block is 2 RAMB18 + ~180 LUTs, 143 FFs (+16 BRAM tiles, 37.5
+  were free); cachesel's LRU and the tag compares scale with it. Block debug words only for the
+  first 24 blocks. `megax-hr18` (REF megax-hr17, NO_REF_SYNTH=1); tb/sim `hr32` (gvtest).
