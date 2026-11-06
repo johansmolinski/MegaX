@@ -1021,3 +1021,7 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   Human68k's DOS call exit intact (`movem.l (sp)+,d0-a6; tst.b $1C14; bne; btst #7,(sp); bne.s;
   rte` at $8618-$861E): the rte took an odd return address from the supervisor stack, a word the
   68000 had written that came back wrong (a write/read path error, not the code).
+- `megax-r3c` = megax-r3b with the fork at b6eeeda (hr21's: without the cachecont abort gating
+  4f35ac4 and the vidcont fast clear 69e7140), built from a worktree (~/megax-work/src-r3c) for an
+  A/B against r3b on SSF2. OK, WNS +0.115 ns, WHS +0.036 ns, 23 critical warnings (as r3b).
+  md5 65e1e3c0ddd5e9fe0925e5a665fe63f5. Not loaded yet.
