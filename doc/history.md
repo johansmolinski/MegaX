@@ -797,3 +797,25 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - `megax-s3` = s2 + X68_R3PROBE false (REF megax-s1).
 - `megax-hr11` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (as hr7). `megax-s2` stopped
   (the user skipped it for s3).
+- `megax-hr12` OK, WNS +0.107 ns. `megax-s3` OK, WNS +0.092 ns, WHS +0.022 ns.
+- `megax-hr11` on the board (the user): the same crash; a bit of HDMI snow hr10 did not have.
+  cachecont's new counter: **0** fills with b_addr's line not sb_addr's. So the tag theory was
+  wrong: window 5 is read word by word while the machine runs, and "two blocks with one tag" was a
+  block read before an eviction and another after it. The tag change stays harmless (the lines
+  were always equal) but fixed nothing.
+- The bus trace (tools/trace.py --arm 564958 --reset; ~/megax-work/hr11-trace.txt) caught it:
+  the CPU writes the long $00014944 to $0148DC and $00014956 to $0148E0, later reads $0148D6,
+  $0148DA, $0148DC and $0148DE all as $4956, the last word it wrote, then `MOVEA.L 6(A1),A4` /
+  `JSR (A4)` at $DF42 jumps to $49564956.
+- **The cause** (x68_hrmem): during a read cachecont merges dirty words of its write cache into
+  the read words (brwdath/brwdatl for fills, the same for the GVRAM and TVRAM line reads); it
+  looks the write cache's data (BWcache, ramaddrwcb) and dirty bits (BWext, bwwes) up at the
+  controller's addr_wc, block RAM with one clock. SDRAMC drives addr_wc <= curaddr and addr_rc <=
+  curaddr one clock later, so addr_wc runs one word ahead during reads too. x68_hrmem moved
+  addr_wc only during writes: during a fill it stayed where the last write-back had left it, and
+  if that word was dirty, every word of the fill became that word.
+- Fix: x68_hrmem sets wc to bgnaddr at a read and steps it with every de word (addr_wc = the
+  next word's column). tb/hrmem checks it now (de words whose addr_wc one clock before was not
+  addr_rc): SDRAMC 0, the old x68_hrmem 284206 (FAIL), the new 0; PASS with seeds 1 and 7 and
+  M2M=1. The self-test x68_hrtest could not see it: it makes its write data from addr_wc itself.
+- `megax-hr13` = the current tree (all of today's fixes) with X68_HRMEM (REF megax-hr12).

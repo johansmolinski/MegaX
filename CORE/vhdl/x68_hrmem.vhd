@@ -12,6 +12,12 @@
 --     end = bgn + 1 (SDRAMC looks for the end two words ahead); in the clock after the last de
 --     word, with busy already low, addr_rc and rddat carry one more word, the one at end, with
 --     de low: cachecont's fast clear takes that word on de's falling edge;
+--   - during a read addr_wc runs one clock ahead of addr_rc: it is the column of the next word
+--     (SDRAMC: addr_wc <= curaddr, addr_rc <= curaddr one clock later). cachecont reads its write
+--     cache and the dirty bits there (block RAM, one clock) and merges dirty words into the fill
+--     and the GVRAM/TVRAM line reads. (megax-hr10/11 left addr_wc where the last write had put it:
+--     when that word was dirty, every word of a fill became that word, and Human68k crashed at its
+--     disk boot, 2026-11-06);
 --   - abort stops the de words of a read;
 --   - a write takes the words bgnaddr .. endaddr (no wrap), each one clock after addr_wc
 --     pointed at it (cachecont's write data comes from block RAM), at least two: SDRAMC's write
@@ -309,6 +315,7 @@ begin
                   l_m   <= v_m;
                   l_n   <= v_m + 1;                          -- the word after them too
                   cnt   <= (others => '0');
+                  wc    <= v_bgn;                            -- addr_wc: the next word (see S_RDATA)
                   tag   <= tag + 1;
                   state <= S_RCMD;
                elsif wr_i = '1' then
@@ -349,6 +356,7 @@ begin
                   addr_rc_r <= std_logic_vector(l_bgn + cnt(7 downto 0));
                   rddat_r   <= r_rd_data(15 downto 0);
                   cnt <= cnt + 1;
+                  wc  <= wc + 1;
                   if v_last then
                      state <= S_RLAST;
                   end if;

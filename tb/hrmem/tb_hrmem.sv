@@ -4,7 +4,8 @@
 // model and through x68_hrmem with an Avalon HyperRAM model; every read's de words (addr_rc,
 // rddat) and the word after them must agree. The HyperRAM side leaves its reset 30 us after the
 // clk_ram side, so the first commands wait in the FIFO. Write data comes from a "cache RAM" with one
-// clock of latency on addr_wc, as in cachecont. With M2M (run.sh M2M=1) the Avalon side is the
+// clock of latency on addr_wc, as in cachecont; during reads addr_wc must run one clock ahead of
+// addr_rc (cachecont merges its write cache there). With M2M (run.sh M2M=1) the Avalon side is the
 // framework's real arbiter and HyperRAM controller with a chip model and two more masters
 // (avl_m2m.sv) instead of avl_model.
 `timescale 1ps/1ps
@@ -108,6 +109,17 @@ module tb_hrmem;
       .byteenable(a_be), .burstcount(a_bc), .readdata(a_rdd), .readdatavalid(a_val), .waitrequest(a_wait));
 `endif
    always @(posedge clk) {h_we, h_wrdat} <= wdata(h_cur, (h_awc - h_b) & 255);
+
+   // during a read addr_wc runs one clock ahead of addr_rc (cachecont reads its write cache and
+   // dirty bits there, one clock of block RAM, and merges them into the read words)
+   reg [7:0] s_awc_d, h_awc_d;
+   int awc_err_s = 0, awc_err_h = 0;
+   always @(posedge clk) begin
+      if (s_de && s_arc != s_awc_d) awc_err_s++;
+      if (h_de && h_arc != h_awc_d) awc_err_h++;
+      s_awc_d <= s_awc;
+      h_awc_d <= h_awc;
+   end
 
    ////////////////////////////////////////////////////////////////////////////////////////
    // the drivers (cachecont's way: a one-clock request, then wait for busy low)
@@ -222,7 +234,9 @@ module tb_hrmem;
                NOPS + NBLK, reads, words, s_busy_clk, h_busy_clk);
       $display("avalon: %0d read bursts (%0d words), %0d write bursts (%0d words)", u_m.n_rd, u_m.n_rw, u_m.n_wr, u_m.n_ww);
       $display("errors: SDRAMC %0d, x68_hrmem %0d; x68_hrmem bring-up flags %b", errs_s, errs_h, u_h.dbg_o);
-      if (errs_h == 0) $display("TB_HRMEM: PASS"); else $display("TB_HRMEM: FAIL");
+      $display("de words whose addr_wc one clock before was not addr_rc: SDRAMC %0d, x68_hrmem %0d",
+               awc_err_s, awc_err_h);
+      if (errs_h == 0 && awc_err_h == 0) $display("TB_HRMEM: PASS"); else $display("TB_HRMEM: FAIL");
       $finish;
    end
 endmodule
