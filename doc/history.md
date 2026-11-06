@@ -819,3 +819,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   addr_rc): SDRAMC 0, the old x68_hrmem 284206 (FAIL), the new 0; PASS with seeds 1 and 7 and
   M2M=1. The self-test x68_hrtest could not see it: it makes its write data from addr_wc itself.
 - `megax-hr13` = the current tree (all of today's fixes) with X68_HRMEM (REF megax-hr12).
+- tb/sim with the cachecont tag change (before the addr_wc fix): SDRAM gvtest 1.2 s, 57 frames
+  identical to sd-gv3; HRMEM gvtest with the board's resets, mode 5 at 245 ms, flags 0205, the
+  same (blank) frames shifted by the later start.
