@@ -87,6 +87,14 @@ Rules:
   resets (HDMI showed only vertical bars: the watchdog restarting ascal on stale lines), so
   something else still cuts write bursts short. `megax-zj` cut 6 write bursts in 20+ resets,
   none of them a black HDMI.
+- **r3-top** (2026-11-06; `vhdl/top_mega65-r3.vhd`): replaced by Megamiga's version from its
+  branch `r3` (c1c36e4, 2026-11-03, unchanged up to 99eef7f), which brings the R3 top up to the
+  R6 top's framework exceptions (sd-host, eth-pins, pmod-pins, rtg-framebuffer; the core's SDRAM
+  ports go nowhere, the PMOD power outputs too). One comment added (`M2M-UPSTREAM r3-top`). Why:
+  MegaX's R3 build (`CORE/CORE-R3.xpr`, the user's R3 board, 2026-11-06); the vendored R3 top was
+  the stale one of Megamiga's `main` and did not match `framework.vhd` or the core's ports.
+  Megamiga's other R3 change (config-board: `qnice_wrapper.vhd` passes G_BOARD to config.vhd) is
+  not taken; MegaX's menu is the same on both boards.
 - **hr-reset-pulse** (2026-11-06; `vhdl/controllers/hyperram/hyperram_ctrl.vhd`): RESET# low for
   the first 50 clocks (500 ns, tRP is 200 ns) of a reset only, then high again while `rst_i` stays
   high (before: low for the whole reset). Why: the framework resets the HyperRAM with every core

@@ -2,7 +2,7 @@
 # Build the MegaX bitstream(s) in Vivado batch mode (PC10-III's build_all.sh, simplified from Megamiga's
 # build_all.sh: no re-roll, no placement margin, no reference builds yet).
 #
-# Usage: ./build_all.sh [board ...]        boards: R6 (default; only CORE-R6.xpr exists)
+# Usage: ./build_all.sh [board ...]        boards: R6 (default), R3 (CORE-R3.xpr)
 #
 #   cd CORE && source <Vivado>/settings64.sh && ./build_all.sh R6
 #

@@ -241,6 +241,9 @@ has 32-bit sizes and a whole-image model that does not fit hard disks.
      build. Next: the R6 build `megax-hr3` on the hardware (VGA, HDMI), then the measurements.
    - Step 3: R3's top and constraints (M2M has them; Megamiga's copy is unused since its 0.2.0),
      the SD sector service, a second project `CORE-R3.xpr`, AGENTS.md rule 6.
+     Started 2026-11-06 (the user unboxed the R3 board): Megamiga's R3 top from its branch `r3`
+     (sd-host engine port included, so the SD sector service is as on R6), `CORE-R3.xpr`,
+     `mega65.vhd` C_HRMEM; first build `megax-r3b`.
    - Fallbacks if the GVRAM reads miss their deadline:
      1. The whole GVRAM in block RAM: 64 more tiles. 37 are free, repacking the CACHEMEMN
         RAMs gives about 17 back, the backup SRAM (16 KB, CPU only, so latency is fine) into

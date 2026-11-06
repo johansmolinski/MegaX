@@ -387,6 +387,10 @@ signal main_dbg_bus           : std_logic_vector(47 downto 0);
 signal main_dbg_opm           : std_logic_vector(15 downto 0);
 signal main_dbg_mem           : std_logic_vector(51 downto 0);  -- R3 study (temporary)
 
+-- The R3 memory path: chosen in globals.vhd (X68_HRMEM, to try it on the R6) and always on the R3,
+-- which has no SDRAM (CORE-R3.xpr, doc/plan.md section 4 item 8 step 3)
+constant C_HRMEM             : boolean := X68_HRMEM or G_BOARD = "MEGA65_R3";
+
 -- the core's HyperRAM port: x68_hrmem in main (X68_HRMEM) or the R3 probe's mirror
 signal main_hr_write          : std_logic;
 signal main_hr_read           : std_logic;
@@ -469,22 +473,22 @@ begin
    -- the core's HyperRAM port: the core's memory with X68_HRMEM (x68_hrmem in x68_system),
    -- x68_r3probe's mirror with X68_R3PROBE (the R3 study, temporary), otherwise idle as before
    -- them. Whoever does not have it sees a port that never answers.
-   hr_core_write_o        <= main_hr_write      when X68_HRMEM else
+   hr_core_write_o        <= main_hr_write      when C_HRMEM else
                              probe_hr_write     when X68_R3PROBE else '0';
-   hr_core_read_o         <= main_hr_read       when X68_HRMEM else
+   hr_core_read_o         <= main_hr_read       when C_HRMEM else
                              probe_hr_read      when X68_R3PROBE else '0';
-   hr_core_address_o      <= main_hr_address    when X68_HRMEM else
+   hr_core_address_o      <= main_hr_address    when C_HRMEM else
                              probe_hr_address   when X68_R3PROBE else (others => '0');
-   hr_core_writedata_o    <= main_hr_writedata  when X68_HRMEM else
+   hr_core_writedata_o    <= main_hr_writedata  when C_HRMEM else
                              probe_hr_writedata when X68_R3PROBE else (others => '0');
-   hr_core_byteenable_o   <= main_hr_byteenable when X68_HRMEM else
+   hr_core_byteenable_o   <= main_hr_byteenable when C_HRMEM else
                              probe_hr_byteenable when X68_R3PROBE else (others => '0');
-   hr_core_burstcount_o   <= main_hr_burstcount when X68_HRMEM else
+   hr_core_burstcount_o   <= main_hr_burstcount when C_HRMEM else
                              probe_hr_burstcount when X68_R3PROBE else (others => '0');
-   main_hr_waitrequest    <= hr_core_waitrequest_i   when X68_HRMEM else '1';
-   main_hr_readdatavalid  <= hr_core_readdatavalid_i when X68_HRMEM else '0';
-   probe_hr_waitrequest   <= hr_core_waitrequest_i   when X68_R3PROBE and not X68_HRMEM else '1';
-   probe_hr_readdatavalid <= hr_core_readdatavalid_i when X68_R3PROBE and not X68_HRMEM else '0';
+   main_hr_waitrequest    <= hr_core_waitrequest_i   when C_HRMEM else '1';
+   main_hr_readdatavalid  <= hr_core_readdatavalid_i when C_HRMEM else '0';
+   probe_hr_waitrequest   <= hr_core_waitrequest_i   when X68_R3PROBE and not C_HRMEM else '1';
+   probe_hr_readdatavalid <= hr_core_readdatavalid_i when X68_R3PROBE and not C_HRMEM else '0';
 
    -- M2M-UPSTREAM rtg-framebuffer: off (ascal shows the core's picture)
    fb_ena_o             <= '0';
@@ -701,7 +705,7 @@ begin
 
    main_power_led_o     <= '1';
    main_power_led_col_o <= x"0000FF" when main_reset_m2m_i else
-                           x"00FF00" when not X68_HRMEM else
+                           x"00FF00" when not C_HRMEM else
                            x"FF0000" when main_dbg_hr_s(8) = '1' else
                            x"FFFFFF" when main_dbg_status(0) = '0' else
                            x"FF00FF" when main_dbg_status(1) = '0' else
@@ -714,8 +718,8 @@ begin
       end if;
    end process p_blink;
 
-   main_drive_led_o     <= '1' when X68_HRMEM else main_fd_motor;
-   main_drive_led_col_o <= x"FFFF00" when not X68_HRMEM else
+   main_drive_led_o     <= '1' when C_HRMEM else main_fd_motor;
+   main_drive_led_col_o <= x"FFFF00" when not C_HRMEM else
                            x"000000" when main_blink(24) = '1' and
                                           (main_dbg_hr_s(9) = '0' or main_dbg_hr_s(10) = '1' or
                                            main_dbg_hr_s(11) = '1') else
@@ -753,7 +757,7 @@ begin
 
    i_main : entity work.main
       generic map (
-         G_HRMEM              => X68_HRMEM
+         G_HRMEM              => C_HRMEM
       )
       port map (
          clk_ram_i            => clk_ram,

@@ -1,6 +1,6 @@
 # Build one board bitstream in Vivado batch mode (called by build_all.sh):
 #
-#   vivado -mode batch -source build_bitstream.tcl -tclargs <R6> [jobs]
+#   vivado -mode batch -source build_bitstream.tcl -tclargs <R6|R3> [jobs]
 #
 # Prints one "RESULT <board> ..." line and exits non-zero on any failure. After the bitstream
 # the routed design is opened and the sign-off gates are checked (constraints that silently
@@ -68,8 +68,9 @@ foreach {clk want} {main_clk 25.000 clk_ram 12.500 clk_scan 14.378 clk_scan38 25
 if {[llength [get_cells -quiet -hierarchical -filter {NAME =~ CORE/i_main/i_x68_system/i_tvram/* && REF_NAME =~ RAMB36*}]] < 128} {
     lappend gate "the text VRAM has fewer than 128 RAMB36 (optimised away?)"
 }
-# the SDRAM I/O constraints (CORE.xdc) must have reached the ports
-if {[llength [get_clocks -quiet sdram_clk_pin]] == 0} {
+# the SDRAM I/O constraints (CORE.xdc) must have reached the ports; the R3 has no SDRAM (its
+# memory is in the HyperRAM, mega65.vhd C_HRMEM) and the constraints match nothing there
+if {$board ne "R3" && [llength [get_clocks -quiet sdram_clk_pin]] == 0} {
     lappend gate "generated clock sdram_clk_pin missing"
 }
 if {[llength $gate] > 0} {

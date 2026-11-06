@@ -984,3 +984,22 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - tb/sim `sd-fc` (gvtest: its _G_CLR_ON runs a fast clear): every frame as `sd-ab`, the same memory
   statistics (no stop write during its clear). `megax-s7` OK, WNS +0.035 ns, WHS +0.022 ns, 20
   critical warnings (as s6). Not loaded yet.
+
+## 2026-11-06 R3 step 3: the R3 core (megax-r3b)
+
+- The user unboxed an R3 board and asked for an R3 core while swapping it in (s7 not tried yet).
+- `M2M/vhdl/top_mega65-r3.vhd`: Megamiga's from its branch `r3` (c1c36e4; M2M-UPSTREAM r3-top,
+  `doc/m2m-provenance.md`). The vendored one was Megamiga main's, without the SD host, the engine
+  port, the Ethernet/PMOD pins and the framebuffer ports the framework and the core have now. Its
+  framework and core port maps are the R6 top's, name for name; MEGA65-R3.xdc and common.xdc are
+  as on Megamiga's `r3` (built there as r3-c, WNS +0.035).
+- `CORE/CORE-R3.xpr`: CORE-R6.xpr with the R3 top, MEGA65-R3.xdc and the R3 top's two extra files
+  (`max10.vhdl` for the reset button through the MAX10, `pcm_to_pdm.vhdl` for the 3.5 mm jack;
+  the R3 top ties its audio DAC off, so audio is the jack and HDMI). Same part (xc7a200tfbg484-2), as Megamiga's.
+- `mega65.vhd`: `C_HRMEM = X68_HRMEM or G_BOARD = "MEGA65_R3"` in place of X68_HRMEM: R3 always
+  gets the HyperRAM memory path (4 MB, no D88), the R6 builds stay as before. The bring-up LEDs
+  follow it (R3: as on the hr builds).
+- `build_bitstream.tcl`: the sdram_clk_pin gate skipped on R3 (CORE.xdc's SDRAM constraints match
+  nothing there: critical warnings expected).
+- `megax-r3b` = this tree (hr21's HyperRAM path + the cachecont abort and vidcont fast-clear fixes
+  of s6/s7), R3, a full build.
