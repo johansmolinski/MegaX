@@ -1052,3 +1052,11 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   floppy DMA load the boot sector correctly against the Avalon HyperRAM model; the one-word shift
   of the R3 board is not reproduced. Not in this model: the framework's arbiter, hyperram_ctrl,
   its PHY and the real chip (tb/hrmem M2M=1 has the first two, with random commands: PASS).
+- megax-r3c again, memtest in FD0 (debug window after the IPL gave up): **the same shift**
+  (deterministic). SD host register 6: the back slot (the user's card) runs in **SPI mode at
+  25 MHz** (reg6 0004: not native, ready, no retries; the card stays in SPI mode when the MEGA65's
+  boot ROM used it that way since power-up), the tray slot empty. x68_sd: 3 blocks read for FDD0,
+  0 errors. The SPI receive path indexes each byte (bidx) and checks the CRC over the same 512
+  bytes, x68_sd acknowledges the core only after the whole block is in its buffer: on paper a
+  2-byte shift cannot pass there. tb/sim feeds sectors from the testbench (no sdhost/x68_sd), and
+  the R6 ran the card native: so the SPI engine path and x68_sd at SPI pace are new on this board.
