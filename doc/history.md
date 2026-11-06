@@ -822,3 +822,4 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - tb/sim with the cachecont tag change (before the addr_wc fix): SDRAM gvtest 1.2 s, 57 frames
   identical to sd-gv3; HRMEM gvtest with the board's resets, mode 5 at 245 ms, flags 0205, the
   same (blank) frames shifted by the later start.
+- `megax-s3` on the board (the user): no HDMI snow, boots from the HDS, the long reset works.
