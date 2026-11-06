@@ -795,3 +795,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   the probe's counters stay, its mirror no longer reaches the framework's core port, which is
   idle again in the SDRAM builds as before the study.
 - `megax-s3` = s2 + X68_R3PROBE false (REF megax-s1).
+- `megax-hr11` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (as hr7). `megax-s2` stopped
+  (the user skipped it for s3).
