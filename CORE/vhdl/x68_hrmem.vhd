@@ -44,12 +44,17 @@
 --
 -- Clock domains: clk_ram (cachecont) and hr_clk (the arbiter), crossed by three x68_afifo:
 -- commands (clk_ram -> hr_clk), write words (clk_ram -> hr_clk) and read words (hr_clk ->
--- clk_ram). An aborted read still delivers all its words: the clk_ram side counts them
--- (skip) and throws exactly that many away before it takes words again (the HyperRAM side
--- keeps the order). Besides, read commands and read words carry a 2-bit tag that counts the
--- reads, write commands and write words one that counts the writes, and a side throws away
--- words of another tag: words left over from a reset of one side. (Tags alone went wrong in
--- tb/hrmem: four aborted reads in a row, and the next read had the first one's tag.)
+-- clk_ram). Read commands and read words carry a 6-bit tag that counts the reads; the clk_ram
+-- side takes only words of the read in progress and throws every other word away. It also shows
+-- the HyperRAM side which read it still wants (rd_want: the tag and whether that read is still
+-- running); the HyperRAM side drops a read at a burst boundary as soon as it is no longer wanted:
+-- cachecont aborts most CPU fills once the 68000 has its word, and before, the rest of each
+-- aborted 128-word fill was still read (and thrown away) ahead of the next fill (megax-hr15: Super
+-- Street Fighter II at 20 MHz slower than the SDRAM build at 10 MHz). A read is wanted no longer
+-- when the clk_ram side shows it ended, or a later read (tags: at most 15 commands wait in the
+-- FIFO, so 6 bits never wrap into a read still on the way). Write commands and write words carry a
+-- 2-bit tag that counts the writes, and the HyperRAM side drops write words of another tag: words
+-- of a write lost to a reset of that side.
 -- The HyperRAM side splits a command into bursts of at most 2**G_BURST_LOG2 words, aligned,
 -- one at a time, so that ascal (the arbiter's first slave) never waits long behind the core:
 -- 16 words, about 0.3 us with the latency (64 words on megax-hr10..14: now and then a flake of
@@ -130,12 +135,13 @@ architecture rtl of x68_hrmem is
       return to_unsigned(n, 9);
    end function u9;
 
-   -- command FIFO: 41..40 tag, 39 write, 38..17 start address, 16..9 wrap mask, 8..0 words
+   -- command FIFO: 45..40 tag (writes: 41..40), 39 write, 38..17 start address, 16..9 wrap mask,
+   -- 8..0 words
    signal c_wr_en      : std_logic := '0';
-   signal c_wr_data    : std_logic_vector(41 downto 0);
+   signal c_wr_data    : std_logic_vector(45 downto 0);
    signal c_wr_free    : unsigned(4 downto 0);
    signal c_rd_en      : std_logic := '0';
-   signal c_rd_data    : std_logic_vector(41 downto 0);
+   signal c_rd_data    : std_logic_vector(45 downto 0);
    signal c_rd_count   : unsigned(4 downto 0);
 
    -- write words: 19..18 tag, 17..16 byte enables, 15..0 data
@@ -146,19 +152,19 @@ architecture rtl of x68_hrmem is
    signal w_rd_data    : std_logic_vector(19 downto 0);
    signal w_rd_count   : unsigned(9 downto 0);
 
-   -- read words: 17..16 tag, 15..0 data
+   -- read words: 21..16 tag, 15..0 data
    signal r_wr_en      : std_logic := '0';
-   signal r_wr_data    : std_logic_vector(17 downto 0);
+   signal r_wr_data    : std_logic_vector(21 downto 0);
    signal r_wr_free    : unsigned(8 downto 0);
    signal r_rd_en      : std_logic;
-   signal r_rd_data    : std_logic_vector(17 downto 0);
+   signal r_rd_data    : std_logic_vector(21 downto 0);
    signal r_rd_count   : unsigned(8 downto 0);
 
    ------------------------------------------------------------------------------------------
    -- clk_ram side
    type t_state is (S_IDLE, S_RCMD, S_RDATA, S_RLAST, S_WWAIT, S_WCAP, S_WCMD);
    signal state        : t_state := S_IDLE;
-   signal tag          : unsigned(1 downto 0) := "00";            -- of the reads
+   signal tag          : unsigned(5 downto 0) := (others => '0'); -- of the reads
    signal wtag         : unsigned(1 downto 0) := "00";            -- of the writes
    signal l_bgn        : unsigned(7 downto 0) := (others => '0');
    signal l_m          : unsigned(8 downto 0) := (others => '0');   -- de words of a read
@@ -169,8 +175,7 @@ architecture rtl of x68_hrmem is
    signal wc           : unsigned(7 downto 0) := (others => '0');
    signal cap_on       : std_logic := '0';
    signal idle_cnt     : unsigned(15 downto 0) := (others => '0');
-   signal skip         : unsigned(11 downto 0) := (others => '0');   -- words of aborted reads still due
-   signal r_skip_pop   : std_logic;
+   signal rd_want      : std_logic_vector(6 downto 0) := (others => '0');   -- running & tag
    signal init_cnt     : unsigned(8 downto 0) := (others => '0');
    signal hrrst_s1     : std_logic := '1';                         -- hr_rst into clk_ram
    signal hrrst_s2     : std_logic := '1';
@@ -188,7 +193,12 @@ architecture rtl of x68_hrmem is
    -- hr_clk side
    type t_hstate is (H_IDLE, H_RWAIT, H_RREQ, H_RDATA, H_WWAIT, H_WBURST);
    signal hstate       : t_hstate := H_IDLE;
-   signal h_tag        : std_logic_vector(1 downto 0) := "00";
+   signal h_tag        : std_logic_vector(5 downto 0) := (others => '0');
+   signal h_want1      : std_logic_vector(6 downto 0) := (others => '0');   -- rd_want in hr_clk
+   signal h_want2      : std_logic_vector(6 downto 0) := (others => '0');
+   signal h_want       : std_logic_vector(6 downto 0) := (others => '0');   -- ... when it held still
+   attribute ASYNC_REG of h_want1, h_want2 : signal is "TRUE";
+   signal h_drop       : std_logic;                                -- the read is no longer wanted
    signal h_wr         : std_logic := '0';
    signal h_addr       : unsigned(21 downto 0) := (others => '0');
    signal h_mask       : unsigned(7 downto 0) := (others => '0');
@@ -235,7 +245,7 @@ begin
    ------------------------------------------------------------------------------------------
 
    i_cmd : entity work.x68_afifo
-      generic map (G_WIDTH => 42, G_LOG2 => 4)
+      generic map (G_WIDTH => 46, G_LOG2 => 4)
       port map (
          wr_clk_i => clk_i, wr_en_i => c_wr_en, wr_data_i => c_wr_data, wr_free_o => c_wr_free,
          rd_clk_i => hr_clk_i, rd_en_i => c_rd_en, rd_data_o => c_rd_data, rd_count_o => c_rd_count);
@@ -247,7 +257,7 @@ begin
          rd_clk_i => hr_clk_i, rd_en_i => w_rd_en, rd_data_o => w_rd_data, rd_count_o => w_rd_count);
 
    i_rdat : entity work.x68_afifo
-      generic map (G_WIDTH => 18, G_LOG2 => 8)
+      generic map (G_WIDTH => 22, G_LOG2 => 8)
       port map (
          wr_clk_i => hr_clk_i, wr_en_i => r_wr_en, wr_data_i => r_wr_data, wr_free_o => r_wr_free,
          rd_clk_i => clk_i, rd_en_i => r_rd_en, rd_data_o => r_rd_data, rd_count_o => r_rd_count);
@@ -265,13 +275,12 @@ begin
 
    -- read words: the head belongs to the read in progress, or it is stale (an aborted read,
    -- a reset): stale words go at once, in every state
-   r_skip_pop   <= '1' when skip /= 0 and r_rd_count /= 0 else '0';
-   r_head_ok    <= '1' when skip = 0 and (state = S_RDATA or state = S_RLAST) and r_rd_count /= 0 and
-                            unsigned(r_rd_data(17 downto 16)) = tag else '0';
-   r_head_stale <= '1' when skip = 0 and r_rd_count /= 0 and
+   r_head_ok    <= '1' when (state = S_RDATA or state = S_RLAST) and r_rd_count /= 0 and
+                            unsigned(r_rd_data(21 downto 16)) = tag else '0';
+   r_head_stale <= '1' when r_rd_count /= 0 and
                             ((state /= S_RDATA and state /= S_RLAST) or
-                             unsigned(r_rd_data(17 downto 16)) /= tag) else '0';
-   r_rd_en      <= r_skip_pop or r_head_stale or r_pop;
+                             unsigned(r_rd_data(21 downto 16)) /= tag) else '0';
+   r_rd_en      <= r_head_stale or r_pop;
 
    -- a read word goes to cachecont (S_RDATA: the last de word only when the word after it is
    -- here too), or the word after the last one (S_RLAST)
@@ -286,13 +295,8 @@ begin
       variable v_m     : unsigned(8 downto 0);
       variable v_n     : unsigned(8 downto 0);
       variable v_last  : boolean;
-      variable v_skip  : unsigned(11 downto 0);
    begin
       if rising_edge(clk_i) then
-         v_skip := skip;
-         if r_skip_pop = '1' then
-            v_skip := v_skip - 1;
-         end if;
          c_wr_en  <= '0';
          w_wr_en  <= '0';
          de_r     <= '0';
@@ -350,8 +354,7 @@ begin
                idle_cnt <= idle_cnt + 1;
                v_last := cnt = l_m - 1;
                if abort_i = '1' then
-                  v_skip := v_skip + resize(l_n - cnt, 12);     -- its words still come
-                  state  <= S_IDLE;
+                  state  <= S_IDLE;                             -- (its words go by their tag)
                elsif r_take = '1' then
                   idle_cnt  <= (others => '0');
                   de_r      <= '1';
@@ -398,19 +401,23 @@ begin
 
             when S_WCMD =>
                if c_wr_free /= 0 then
-                  c_wr_data <= std_logic_vector(wtag) & '1' & std_logic_vector(l_start) &
+                  c_wr_data <= "0000" & std_logic_vector(wtag) & '1' & std_logic_vector(l_start) &
                                x"FF" & std_logic_vector(l_n);
                   c_wr_en   <= '1';
                   state     <= S_IDLE;
                end if;
          end case;
 
-         skip <= v_skip;
+         -- the read the clk_ram side still wants (registered: it crosses to hr_clk)
+         if state = S_RCMD or state = S_RDATA or state = S_RLAST then
+            rd_want <= '1' & std_logic_vector(tag);
+         else
+            rd_want <= '0' & std_logic_vector(tag);
+         end if;
 
          if rstn_i = '0' then
             state    <= S_IDLE;
             init_cnt <= (others => '0');
-            skip     <= (others => '0');
          end if;
       end if;
    end process p_ram;
@@ -446,13 +453,26 @@ begin
 
    -- write words of another tag (a write lost by a reset of this side) are dropped
    h_wstart <= '1' when hstate = H_WWAIT and h_prep = '0' and h_left /= 0 and w_rd_count >= h_len_r and
-                        w_rd_data(19 downto 18) = h_tag else '0';
+                        w_rd_data(19 downto 18) = h_tag(1 downto 0) else '0';
    h_wpop   <= '1' when h_wstart = '1' or
                         (hstate = H_WBURST and hr_waitrequest_i = '0' and h_beats /= 1) else '0';
    -- (only while this write still has words to come: the clock after its last burst, the head
    -- is already the next write's)
    w_rd_en  <= '1' when (hstate = H_WWAIT and h_prep = '0' and h_left /= 0 and w_rd_count /= 0 and
-                         w_rd_data(19 downto 18) /= h_tag) or h_wpop = '1' else '0';
+                         w_rd_data(19 downto 18) /= h_tag(1 downto 0)) or h_wpop = '1' else '0';
+
+   -- a read no longer wanted: the clk_ram side shows it ended, or a later read (6-bit tags,
+   -- "later" = 1..31 ahead; behind it can only be while rd_want is on its way)
+   p_drop : process (all)
+      variable v_d : unsigned(5 downto 0);
+   begin
+      v_d := unsigned(h_want(5 downto 0)) - unsigned(h_tag);
+      if (h_want(6) = '0' and v_d = 0) or (v_d /= 0 and v_d(5) = '0') then
+         h_drop <= '1';
+      else
+         h_drop <= '0';
+      end if;
+   end process p_drop;
 
    p_hr : process (hr_clk_i)
       variable v_addr : unsigned(21 downto 0);
@@ -461,6 +481,12 @@ begin
       if rising_edge(hr_clk_i) then
          c_rd_en <= '0';
          r_wr_en <= '0';
+         -- rd_want into hr_clk; taken once two samples agree (its bits change together)
+         h_want1 <= rd_want;
+         h_want2 <= h_want1;
+         if h_want2 = h_want1 then
+            h_want <= h_want2;
+         end if;
          -- the next burst's length, one clock after h_addr, h_left and h_mask changed (every
          -- state that changes them sets h_prep, the wait states then skip a clock)
          h_len_r <= h_next_len;
@@ -471,7 +497,7 @@ begin
                -- (not in reset: the reset below would put the state back, the command taken
                -- out of the FIFO would be lost and its read would wait for the timeout, tb/sim)
                if c_rd_count /= 0 and c_rd_en = '0' and hr_rst_i = '0' then
-                  h_tag  <= c_rd_data(41 downto 40);
+                  h_tag  <= c_rd_data(45 downto 40);
                   h_wr   <= c_rd_data(39);
                   h_addr <= unsigned(c_rd_data(38 downto 17));
                   h_mask <= unsigned(c_rd_data(16 downto 9));
@@ -489,7 +515,7 @@ begin
             when H_RWAIT =>
                if h_prep = '1' then
                   null;
-               elsif h_left = 0 then
+               elsif h_left = 0 or h_drop = '1' then
                   hstate <= H_IDLE;
                elsif r_wr_free >= h_len_r and hr_rst_i = '0' then
                   h_len   <= h_len_r;
@@ -656,12 +682,12 @@ begin
             x_ndew <= x_ndew + 1;
          end if;
          x_ram(0)  <= std_logic_vector(to_unsigned(t_state'pos(state), 4)) & hrrst_s2 & rd_i & wr_i &
-                      refrsh_i & abort_i & init_cnt(8) & std_logic_vector(tag) & std_logic_vector(wtag) &
+                      refrsh_i & abort_i & init_cnt(8) & std_logic_vector(tag(1 downto 0)) & std_logic_vector(wtag) &
                       de_r & cap_on;
          x_ram(1)  <= "0000000" & std_logic_vector(cnt);
          x_ram(2)  <= "0000000" & std_logic_vector(l_m);
          x_ram(3)  <= "0000000" & std_logic_vector(l_n);
-         x_ram(4)  <= "0000" & std_logic_vector(skip);
+         x_ram(4)  <= "000000000" & rd_want;
          x_ram(5)  <= "00" & std_logic_vector(c_wr_free) & std_logic_vector(r_rd_count);
          x_ram(6)  <= "000000" & std_logic_vector(w_wr_free);
          x_ram(7)  <= std_logic_vector(idle_cnt);
@@ -691,7 +717,7 @@ begin
          if (hstate = H_RREQ or hstate = H_WBURST) and hr_waitrequest_i = '0' then
             x_hbst <= x_hbst + 1;
          end if;
-         x_hr(0)  <= std_logic_vector(to_unsigned(t_hstate'pos(hstate), 4)) & h_tag & h_wr & h_prep &
+         x_hr(0)  <= std_logic_vector(to_unsigned(t_hstate'pos(hstate), 4)) & h_tag(1 downto 0) & h_wr & h_prep &
                      hr_rst_i & hr_waitrequest_i & hr_readdatavalid_i & h_read & h_write & "000";
          x_hr(1)  <= "0000000" & std_logic_vector(h_left);
          x_hr(2)  <= "0000000" & std_logic_vector(h_beats);
