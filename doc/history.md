@@ -921,3 +921,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   since the reset fix). mega65.vhd: the drive LED keeps the self-test's blinking results, then
   shows the floppy motor as without X68_HRMEM; the flags stay readable in the debug window. In the
   build after megax-hr18.
+- `megax-hr18` OK, WNS +0.083 ns, WHS +0.025 ns, 35 critical warnings; block RAM 343.5 of 365
+  tiles (+16, the 16 more blocks). Not loaded yet.
