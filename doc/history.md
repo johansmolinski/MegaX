@@ -1060,3 +1060,15 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   bytes, x68_sd acknowledges the core only after the whole block is in its buffer: on paper a
   2-byte shift cannot pass there. tb/sim feeds sectors from the testbench (no sdhost/x68_sd), and
   the R6 ran the card native: so the SPI engine path and x68_sd at SPI pace are new on this board.
+- The user pulled and replugged the card (power cycled, so the SD host tries native 4-bit) and
+  megax-r3c was loaded: **FATAL ERROR EE31** = sdhost C_ERR_INIT, the card's initialisation failed
+  (native, and no working fallback once the card had seen SD-mode commands). So the R3A's back
+  slot does not work in native mode (the R6 does); with the MEGA65 boot ROM first (SPI) it works.
+  M2M's original R3 XDC (2023, 5b2982c) had the slots the other way round (sd_* = D17/B17/B18/
+  B16/B15, sd2_* = K1/G2/H2/J2/K2); the current one maps them as on the R6 since 08b8cd4. To check.
+- Megamiga's sdhost testbench (~/aexp-work/sdhost, a card model in native and SPI mode) checks the
+  engine port byte for byte in SPI mode too (PASS): the SPI path is not the likely cause of the
+  shift. Another candidate: cachecont's write address when the bus passes between the 68000 and
+  the DMAC (the read side of it was hr11's b_addr/sb_addr fix): every DMA word one word up, $2000
+  untouched, as seen. Timing-dependent; tb/sim `hr-mt3` (turbo), `hr-mt4` (HyperRAM latency
+  40..120, HOG 300,200), `hr-mt5` (both), memtest, 2.4 s.
