@@ -852,3 +852,9 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   at that moment, the X68000 restarted; it does not reproduce the hang by itself.
 - `megax-hr14` = hr13 + this fix (REF megax-hr13).
 - `megax-hr14` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings. Not loaded yet.
+
+## 2026-11-06 Release 0.1.1 (the user: a user's R6 does not boot 0.1)
+
+- 0.1.1 = megax-s3's source (the SDRAM build: cacheext fix, x68_boot long-reset fix, cachecont
+  tag change, X68_R3PROBE false) + CORE_VERSION "0.1.1". `megax-s4` (REF megax-s3): Vivado
+  segfault in synthesis (incremental); `megax-s5` the same with NO_REF_SYNTH=1.
