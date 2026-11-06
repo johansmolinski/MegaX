@@ -968,3 +968,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   it sees the abort (and before hr17 delivered a different number), so the HyperRAM builds hit it
   differently. Fork 4f35ac4: no block writes (brcache_extwr, brwr) while `aborted`. tb/sim
   `sd-ab` (gvtest, SDRAM, 1.2 s) against `sd-tag`; `megax-s6` (the SDRAM build with the fix).
+- tb/sim `sd-ab`: every frame the same as `sd-tag`'s, the same memory statistics (1934285 68000
+  reads, waiting 4.07 %): no abort hit the gated words in gvtest, no change in behaviour there.
+- `megax-s6` OK, WNS +0.040 ns, WHS +0.022 ns. Not loaded yet.
