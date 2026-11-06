@@ -894,3 +894,12 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - tb/sim with `--hr-hog 300,140` (waitrequest held 140 of every 300 clocks, about ascal's share):
   `hog-base` (hr15's x68_hrmem) against `hog-drop`. `megax-hr16` = the drop (REF megax-hr15,
   NO_REF_SYNTH=1).
+- `megax-hr16`: TIMING-FAILED, WNS -0.376 ns, only rd_want -> h_want1 (clk_ram -> hr_clk, the new
+  crossing had no constraint). CORE.xdc: set_max_delay -datapath_only 8 to h_want1, as the FIFOs'.
+  `megax-hr17` = hr16 + that (REF megax-hr16).
+- Probe on hr15 (SSF2 at 20 MHz, window over the 43 s wrap, so only the classes' shares count):
+  memory busy ~89 % of the time (GVRAM line reads ~39 %, CPU fills ~49 %), a CPU read 37.9 clk_ram
+  cycles on average (SDRAM build, file manager: 3.3), longest 24 us. With 16-word bursts the
+  HyperRAM's fixed cost per burst (~20 clocks) is paid for 16 words: a 512-word GVRAM line takes
+  ~12 us. The snow limit is ascal's input buffer: two bursts of 128 bytes (i_dpram BLEN*2), one
+  fills in 1.84 us in the 768-dot modes.
