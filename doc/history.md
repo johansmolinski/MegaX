@@ -1003,3 +1003,7 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   nothing there: critical warnings expected).
 - `megax-r3b` = this tree (hr21's HyperRAM path + the cachecont abort and vidcont fast-clear fixes
   of s6/s7), R3, a full build.
+- `megax-r3b` OK, **WNS +0.103 ns, WHS +0.015 ns**, 23 critical warnings: CORE.xdc's SDRAM
+  constraints (lines 99-111, no SDRAM ports on R3) and the midi multicycle, the SD hosts' IOB
+  output enables and the pblock as on s7; x68_hrmem's crossing constraints all found.
+  md5 d03f57b9658ff256d7633c691c9691a2. Not loaded yet.
