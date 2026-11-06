@@ -6,8 +6,19 @@ A port of the [MiSTer Sharp X68000 core](https://github.com/MiSTer-devel/X68000_
 MiSTer2MEGA65 framework as modified by
 [Megamiga](https://github.com/johansmolinski/Megamiga).
 
-**Version 0.1, the first release.** MEGA65 R6 only (an R3 port is planned,
-`doc/plan.md`). See `doc/history.md` for the details of every step.
+**Version 0.1.1** (2026-11-06), a bug-fix release of 0.1. MEGA65 R6 only (an
+R3 port is in progress, `doc/plan.md`). See `doc/history.md` for the details
+of every step.
+
+Changes in 0.1.1:
+
+* A possible hang at start-up fixed: a part of the core's memory cache
+  (MiSTer's `cacheext`) looked at the CPU clock as if it were data, from a clock
+  whose edges fall at the same moments. Whether that worked depended on the
+  chip's placement and timing; when it did not, the X68000 stopped before its
+  first picture. 0.1 happened to work on our board.
+* A long press of the reset button (1.5 s, the framework reset) left the power
+  LED blue and the core hanging; it now restarts the X68000.
 
 Status (0.1, 2026-11-03)
 ------------------------
@@ -45,9 +56,9 @@ sometimes started in the ROM debugger instead of booting (not seen lately).
 Getting started
 ---------------
 
-1. Install the core: copy `MegaX-0.1-R6.cor` to the SD card and flash it into
+1. Install the core: copy `MegaX-0.1.1-R6.cor` to the SD card and flash it into
    a core slot (hold No Scroll while switching the MEGA65 on), or load
-   `MegaX-0.1-R6.bit` through JTAG.
+   `MegaX-0.1.1-R6.bit` through JTAG.
 2. Make a folder `/megax` on the SD card and put MiSTer's `boot.rom` in it
    (1 MB: Sharp's IPL and CGROM, not part of MegaX), together with your disk
    images.

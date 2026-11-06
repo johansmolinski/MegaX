@@ -868,3 +868,13 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   with the latency; the arbiter serves ascal first but does not cut a running burst).
 - x68_hrmem G_BURST_LOG2 6 -> 4: bursts of at most 16 words (~0.3 us). tb/hrmem: PASS (model and
   M2M=1, with and without +hrrst=12, seeds 1 and 5). `megax-hr15` = hr14 + this (REF megax-hr14).
+
+## 2026-11-06 Release 0.1.1 published
+
+- `megax-s5` on the board (the user): the menu shows MegaX 0.1.1, boots from the HDS, the long
+  reset works. `MegaX-0.1.1-R6.bit` = megax-s5 (md5 f3437eaa...), `MegaX-0.1.1-R6.cor` by
+  `coretool -B ... --target mega65r6 --bit-name "MegaX X68000" --bit-version 0.1.1` (verify OK),
+  in `~/megax-work/release/MegaX-0.1.1`.
+- Tag V0.1.1 on MegaX main (the README for 0.1.1). megax-s5 was built from cbc9487; between it and
+  the tag only x68_hrmem.vhd changed (16-word bursts), which the SDRAM build does not contain.
+  Fork master fast-forwarded to develop 7eda3fd.
