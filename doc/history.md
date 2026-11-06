@@ -878,3 +878,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - Tag V0.1.1 on MegaX main (the README for 0.1.1). megax-s5 was built from cbc9487; between it and
   the tag only x68_hrmem.vhd changed (16-word bursts), which the SDRAM build does not contain.
   Fork master fast-forwarded to develop 7eda3fd.
+- `megax-hr15` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (16-word bursts in its tree).
+  Not loaded yet.
