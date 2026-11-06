@@ -851,3 +851,4 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   what is in flight. One run (button at 300 ms for 60 ms, the old x68_hrmem): no read was in flight
   at that moment, the X68000 restarted; it does not reproduce the hang by itself.
 - `megax-hr14` = hr13 + this fix (REF megax-hr13).
+- `megax-hr14` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings. Not loaded yet.
