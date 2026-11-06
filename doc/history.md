@@ -950,3 +950,8 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - `megax-hr20`: Vivado segfault in incremental synthesis (as megax-s4); rebuilt as `megax-hr21`
   (NO_REF_SYNTH=1, REF megax-hr19 for place and route), the same source.
 - `megax-hr21` OK, WNS +0.043 ns, WHS +0.025 ns, 35 critical warnings (as hr19). Not loaded yet.
+- `megax-s3` (the user): the long reset boots (the ROM is in the SDRAM there). An older issue seen
+  again on s3 (and on earlier hr builds, gone in later ones): graphics shown earlier come back
+  later in white (the HDS distribution's loading screen, then the SHARP logo as white/dotted
+  ghosts on the next screen). Not yet looked at.
+- `megax-hr21` loaded (the user's OK).
