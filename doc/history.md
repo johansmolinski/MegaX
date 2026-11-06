@@ -971,3 +971,13 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - tb/sim `sd-ab`: every frame the same as `sd-tag`'s, the same memory statistics (1934285 68000
   reads, waiting 4.07 %): no abort hit the gated words in gvtest, no change in behaviour there.
 - `megax-s6` OK, WNS +0.040 ns, WHS +0.022 ns. Not loaded yet.
+- `megax-s6` on the board (the user): **the ghost is still there**, this time only its bottom half;
+  and it stays in GVRAM: the file manager does not show it, but MMDSP's loading shows the same
+  ghost again. So the cachecont fix (kept: a real stale-word path) was not the cause: part of the
+  picture is never cleared. vidcont: a write to the operation port ($E80481) with bit 1 = 0 stops a
+  running fast clear at the next hcomp (the bottom part stays) or cancels a requested one (all of
+  it stays); every raster copy start or end (bit 3, text scrolling) is such a write, so the
+  console's output during a clear decides how much is cleared - timing-dependent, which fits 0.1
+  and hr17+ not showing it. MAME's x68k_crtc clears on bit 1 = 1 and a later 0 does not undo it.
+  Fork (vidcont): the stop and the cancel removed, a requested clear always runs its frame
+  (`gclrend` unused). tb/sim `sd-fc` (gvtest) against `sd-ab`; `megax-s7` = s6 + this.
