@@ -949,3 +949,4 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   back after the hr19 test: switch the MEGA65 off and on.
 - `megax-hr20`: Vivado segfault in incremental synthesis (as megax-s4); rebuilt as `megax-hr21`
   (NO_REF_SYNTH=1, REF megax-hr19 for place and route), the same source.
+- `megax-hr21` OK, WNS +0.043 ns, WHS +0.025 ns, 35 critical warnings (as hr19). Not loaded yet.
