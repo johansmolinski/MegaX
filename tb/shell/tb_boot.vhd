@@ -7,7 +7,8 @@
 -- for "ended". The X68000 side is x68_system's loader glue (p_loader, copied) with a core that
 -- acknowledges each byte after a pseudo-random 3..40 clk_sys clocks (ldr_ack rising) and stores
 -- it. Checks: every byte at its address, in order, boot_active high from before the first
--- strobe to after the last acknowledge, ldr_done at the end, size = N, ended read back.
+-- strobe to after the last acknowledge, ldr_done at the end, size = N, ended read back. Then a
+-- long reset (qnice_rst) and a second load: QNICE never held, no byte reaches the core.
 --
 -- Run: tb/shell/run_boot.sh (on the Fedora host)
 ----------------------------------------------------------------------------------
@@ -142,6 +143,7 @@ begin
 
    p_qnice : process
       procedure qaccess(addr : natural; data : std_logic_vector(15 downto 0); we : std_logic) is
+         variable v_w : natural := 0;
       begin
          wait until rising_edge(qclk);
          q_addr  <= std_logic_vector(to_unsigned(addr, 28));
@@ -151,6 +153,8 @@ begin
          loop
             wait until falling_edge(qclk);
             exit when q_wait = '0';
+            v_w := v_w + 1;
+            assert v_w < 100000 report "QNICE held for ever (qnice_wait_o)" severity failure;
          end loop;
          wait until rising_edge(qclk);
          q_ce <= '0';
@@ -218,6 +222,32 @@ begin
          report "the end: ldr_done / boot_active / boot_ended not 1 / 0 / 1" severity error;
          v_err := v_err + 1;
       end if;
+      -- a long reset: the Shell restarts (qnice_rst) and loads the ROM again; the bytes must be
+      -- taken without stalling QNICE and without reaching the core
+      wait until rising_edge(qclk);
+      qrst <= '1';
+      wait for 200 ns;
+      wait until rising_edge(qclk);
+      qrst <= '0';
+      wait for 1 us;
+      for i in 0 to C_N - 1 loop
+         qaccess(i, x"00" & not pattern(i), '1');
+      end loop;
+      qaccess(16#1000# * 4096 + 2, x"0001", '1');
+      wait for 2 us;
+      if nwr /= C_N or boot_active /= '0' or boot_ended /= '1' then
+         report "the reload: " & integer'image(nwr) & " bytes taken, boot_active / boot_ended not 0 / 1"
+            severity error;
+         v_err := v_err + 1;
+      end if;
+      for i in 0 to C_N - 1 loop
+         if mem(i) /= pattern(i) then
+            report "after the reload byte " & integer'image(i) & " = " & to_hstring(mem(i)) severity error;
+            v_err := v_err + 1;
+            exit;
+         end if;
+      end loop;
+
       wait for 10 ns;
       v_err := v_err + cerr;
       if v_err = 0 then

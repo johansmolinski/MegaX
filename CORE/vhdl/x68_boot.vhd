@@ -24,6 +24,12 @@
 -- Writes to window 0xFFFF (the Shell's CRT/ROM load CSR) are ignored; reads of the image
 -- windows return 0.
 --
+-- One load per power-on: the clk_sys side ends once and stays ended (the core keeps ldr_done,
+-- the ROM stays in memory). A long press of the reset button (the M2M reset) restarts the Shell,
+-- which loads the ROM again; those bytes are taken from the FIFO and dropped. (Before, the FIFO
+-- filled up and qnice_wait_o held the Shell for ever: the power LED stayed blue, the Shell's
+-- reset to the core never ended. The user, 2026-11-06.)
+--
 -- clk_sys side: boot_active rises with the first byte in the FIFO, the first strobe follows
 -- 1024 clocks later (on the MiSTer the download starts before its first write, too). Then one
 -- byte at a time: boot_wr is a one-clock strobe; x68_system answers with
@@ -212,8 +218,9 @@ begin
    -- clk_sys side
    ---------------------------------------------------------------------------------------------
 
-   s_rd_en <= '1' when s_empty = '0' and s_rd_rst_busy = '0' and s_holdoff = 0 and
-                       boot_wait_i = '0' and s_active = '1' and s_ended = '0' else '0';
+   -- after the end, bytes of a later load are taken and dropped (see the header)
+   s_rd_en <= '1' when s_empty = '0' and s_rd_rst_busy = '0' and
+                       ((s_holdoff = 0 and boot_wait_i = '0' and s_active = '1') or s_ended = '1') else '0';
 
    p_sys : process (clk_sys_i)
    begin
@@ -226,7 +233,7 @@ begin
             s_active  <= '1';
             s_holdoff <= 1023;
          end if;
-         if s_rd_en = '1' then
+         if s_rd_en = '1' and s_ended = '0' then
             s_addr    <= s_dout(27 downto 8);
             s_data    <= s_dout(7 downto 0);
             s_wr      <= '1';

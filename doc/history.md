@@ -778,3 +778,13 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   moved on, its line simply misses and gets its own fill afterwards. cachecont dbg2_o word 8
   (temporary) counts fills where the two lines differed (tools/hrstate.py prints it).
 - `megax-hr11` = hr10 + the fix (REF megax-hr10).
+- The user: a long press of the reset button (the M2M reset) leaves the power LED blue for ever
+  (also before; never tested). x68_boot's clk_sys side ended once and stayed ended (only the
+  clocks' reset cleared s_ended), but the restarted Shell loads boot.rom again: no byte left the
+  FIFO, qnice_wait_o held QNICE for ever, so the Shell's reset to the core (blue) never ended. Every
+  build since phase 2 has it, 0.1 included. Fix: after the end the clk_sys side takes the bytes of
+  a later load and drops them (the core keeps ldr_done and the ROM in memory); the long reset then
+  restarts the X68000 like a short one. tb_boot: a long reset and a second load (the old x68_boot
+  fails it: "QNICE held for ever"); PASS.
+- `megax-hr12` = hr11 + the x68_boot fix (REF megax-hr10); `megax-s2` = s1 + the cachecont tag fix
+  + the x68_boot fix (REF megax-s1).
