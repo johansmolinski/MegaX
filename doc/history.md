@@ -947,3 +947,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   only. tb/hrmem (M2M=1, +hrrst=4): PASS, RESET# low 51 clocks at most; the old controller 3482
   (the check, now fatal at 1 us, caught it). In `megax-hr20` (REF megax-hr19). To get a good ROM
   back after the hr19 test: switch the MEGA65 off and on.
+- `megax-hr20`: Vivado segfault in incremental synthesis (as megax-s4); rebuilt as `megax-hr21`
+  (NO_REF_SYNTH=1, REF megax-hr19 for place and route), the same source.
