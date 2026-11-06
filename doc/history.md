@@ -1072,3 +1072,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   the DMAC (the read side of it was hr11's b_addr/sb_addr fix): every DMA word one word up, $2000
   untouched, as seen. Timing-dependent; tb/sim `hr-mt3` (turbo), `hr-mt4` (HyperRAM latency
   40..120, HOG 300,200), `hr-mt5` (both), memtest, 2.4 s.
+- The user: the R3 runs the 68000 at 20 MHz (turbo); the drive LED does not blink after a load
+  (x68_hrtest passes on the R3A).
