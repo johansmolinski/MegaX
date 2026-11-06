@@ -825,3 +825,29 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - `megax-s3` on the board (the user): no HDMI snow, boots from the HDS, the long reset works.
 - `megax-hr13` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (as hr7..12); the build tree
   has the addr_wc fix. Not loaded yet.
+- `megax-hr13` on the board (the user): **boots from the HDS, no snow on HDMI, the long reset
+  brings the Shell back** (blue to green). But after any reset, short or long, the X68000 does not
+  boot: drive LED steady blue (a read timed out). QMON at the hang: the HyperRAM kept its contents
+  (IPL ROM and CGROM words as boot.rom, main RAM's vectors); x68_hrmem timed out 1 read; cachecont
+  idle, the 68000 asking for $FF0000's line 7f8000, read block 6 holding that tag without its
+  words, so no new fill (the hr7..9 picture, by another way).
+- **The cause**: the framework resets the HyperRAM with every core reset (clk_m2m.vhd: hr_rst
+  from `qnice_locked and sys_rstn_i and core_rstn_i`, "reset only the core (means the HyperRAM
+  needs to be reset, too)"; the controller also pulls the chip's RESET#, contents kept). x68_hrmem's
+  hr_clk side dropped the command it was executing on hr_rst; a read so cut never got its words,
+  x68_hrmem gave up after 65536 clocks and cachecont kept the half-empty block. At power-on nothing
+  is in flight (memcont waits for initdone), so it never showed before.
+- Fix (x68_hrmem): on hr_rst a read in H_RREQ/H_RDATA goes back to H_RWAIT with the address and
+  count moved past the words already received, and H_RWAIT starts no burst during the reset; it
+  resumes after it. A write in flight is still dropped (its remaining words go by their tag; the
+  X68000 is reset at the same time).
+- tb/hrmem `+hrrst=<n>`: n resets of the HyperRAM side of 30..40 us, 300 us apart, each in a read
+  with more bursts to come (so no write is lost and SDRAMC's results still apply); avl_model got a
+  reset. 12 resets, seeds 1/3/9/21, model and M2M=1: PASS; the old x68_hrmem: FAIL (model 40 of 40
+  reads with a reset lost, M2M 6). (Shorter or denser pulses: the framework controller's 150 us
+  start after each reset kept a read waiting past the testbench's limit, not a fault.) With M2M=1 the
+  testbench dumps the controller and arbiters when x68_hrmem stays busy.
+- tb/sim `--button <ms>,<us>` (new): the core reset and hr_rst together, the HyperRAM model drops
+  what is in flight. One run (button at 300 ms for 60 ms, the old x68_hrmem): no read was in flight
+  at that moment, the X68000 restarted; it does not reproduce the hang by itself.
+- `megax-hr14` = hr13 + this fix (REF megax-hr13).

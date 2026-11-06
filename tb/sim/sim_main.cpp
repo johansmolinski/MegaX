@@ -32,6 +32,9 @@
 // M2M reset holds it at power-on (the blue power LED: the framework, the Shell and the HyperRAM in
 // reset, the X68000's memory controller and video already running); the boot ROM load starts
 // 1 ms after it. Default: 2 us.
+// --button <ms>,<us>: the reset button pressed short at <ms> for <us> microseconds: the core reset
+// and hr_rst together (the framework resets the HyperRAM with every core reset, clk_m2m.vhd); the
+// HyperRAM model drops what is in flight, as the controller does.
 //
 // Memory timing (x68_system's dbg_mem, the R3 probe's lines): per line the time from HCOMP to
 // the end of cachecont's last GVRAM read state (the plane caches must be filled before the next
@@ -46,7 +49,7 @@
 //            [--slowload <boot.rom>] [--trace <file.vcd> --trace-from <ms> --trace-to <ms>]
 //            [--bus <file> [--bus-from <ms>] [--bus-to <ms>] [--bus-data]]
 //            [--fd0 <image>] [--fd1 <image>] [--hr-rom <boot.rom>] [--hr-hog <period>,<length>]
-//            [--hw-reset <us>] [--hr-reset <us>]
+//            [--hw-reset <us>] [--hr-reset <us>] [--button <ms>,<us>]
 //            [--save <file> --save-at <ms>] [--restore <file>] [+plusargs...]
 // Checkpoints (Verilator --savable): --save writes the model and the testbench state
 // at the first clk_sys edge at or after --save-at and runs on; --restore continues
@@ -98,6 +101,8 @@ struct HrModel {
    long n_rd = 0, n_wr = 0, w_rd = 0, w_wr = 0, c_wait_core = 0, c_busy = 0;
    uint32_t rnd() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
    // a rising edge of hr_clk: the handshakes of the cycle that ends (before the model sees it)
+   // hr_rst: the framework's controller drops what is in flight (its INIT_ST holds waitrequest)
+   void reset() { rd_pend = 0; rd_lat = 0; wr_left = 0; wait = true; valid = false; }
    void rise(bool write, bool read, uint32_t addr, uint16_t wd, unsigned be, unsigned bc) {
       cyc++;
       if ((read || write) && wait) c_wait_core++;
@@ -154,6 +159,7 @@ int main(int argc, char** argv) {
    double hw_reset_us = -1;          // --hw-reset: < 0 = the default resets
    double hw_reset_end = -1;         // fs
    double hr_reset_us = 2;           // --hr-reset
+   double button_ms = -1, button_us = 0, button_end = -1;   // --button <ms>,<us>
    double memlog_ms = 0.0;                               // --memlog <ms>: cachecont's commands until then
    long hog_period = 0, hog_len = 0;
    int hr_lat_min = 15, hr_lat_span = 15;
@@ -184,6 +190,7 @@ int main(int argc, char** argv) {
       else if (a == "--hr-nogap") hr_nogap = true;
       else if (a == "--hw-reset" && i + 1 < argc) hw_reset_us = atof(argv[++i]);
       else if (a == "--hr-reset" && i + 1 < argc) hr_reset_us = atof(argv[++i]);
+      else if (a == "--button" && i + 1 < argc) sscanf(argv[++i], "%lf,%lf", &button_ms, &button_us);
    }
    HrModel hr;
    hr.hog_period = hog_period; hr.hog_len = hog_len;
@@ -359,9 +366,10 @@ int main(int argc, char** argv) {
             if (now < (fs_t)(memlog_ms * 1e12) && !hr.wait && (top->hr_read || (top->hr_write && hr.wr_left == 0)))
                printf("[%10.6f ms] hr %s address %06x burstcount %u\n", now / 1e12, top->hr_read ? "read " : "write",
                       (unsigned)top->hr_address, (unsigned)top->hr_burstcount);
-            hr.rise(top->hr_write, top->hr_read, top->hr_address, top->hr_writedata,
-                    top->hr_byteenable, top->hr_burstcount);
-            if (top->hr_rst && (double)now > hr_reset_us * 1e9) {
+            if (top->hr_rst) hr.reset();
+            else hr.rise(top->hr_write, top->hr_read, top->hr_address, top->hr_writedata,
+                         top->hr_byteenable, top->hr_burstcount);
+            if (top->hr_rst && button_end < 0 && (double)now > hr_reset_us * 1e9) {
                top->hr_rst = 0;
                if (hr_reset_us > 2) printf("[%8.3f ms] hr_rst released\n", now / 1e12);
             }
@@ -458,6 +466,16 @@ int main(int argc, char** argv) {
                printf("[%8.3f ms] the Shell's reset released\n", now / 1e12);
             }
          } else if (sys_cycles == 1000) top->reset = 0;
+         // --button: the reset button pressed short (the core reset, and with it hr_rst)
+         if (button_ms >= 0 && button_end < 0 && (double)now >= button_ms * 1e12) {
+            top->reset = 1; top->hr_rst = 1;
+            button_end = (double)now + button_us * 1e9; button_ms = -1;
+            printf("[%8.3f ms] reset button: the core reset and hr_rst\n", now / 1e12);
+         }
+         if (button_end >= 0 && (double)now >= button_end) {
+            top->reset = 0; top->hr_rst = 0; button_end = -2;
+            printf("[%8.3f ms] reset button released\n", now / 1e12);
+         }
 
          // loader (MiSTer's ioctl: one byte per write, wait while boot_wait)
          top->boot_wr = 0;

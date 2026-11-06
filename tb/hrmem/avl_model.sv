@@ -4,6 +4,7 @@
 `timescale 1ps/1ps
 module avl_model (
    input             clk,
+   input             rst,                 // hr_rst: what is in flight is dropped (as the controller)
    input             write,
    input             read,
    input      [31:0] address,
@@ -64,5 +65,8 @@ module avl_model (
          n_ww <= n_ww + 1;
       end
       wait_r <= ($urandom() % 4 == 0);
+      if (rst) begin
+         rd_pend <= 0; wr_left <= 0; wait_r <= 1; readdatavalid <= 0;
+      end
    end
 endmodule

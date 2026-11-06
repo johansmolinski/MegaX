@@ -14,8 +14,29 @@ module tb_hrmem;
    reg clk = 0;  always #6250 clk = ~clk;         // clk_ram 80 MHz
    reg hclk = 0; always #5000 hclk = ~hclk;        // hr_clk 100 MHz
    reg rstn = 0;
-   reg hr_rst = 1;                                 // the HyperRAM side leaves reset 30 us later
-   initial #30100000 hr_rst = 0;                   // (the first commands come before: tb/sim found them lost)
+   reg hr_rst0 = 1;                                // the HyperRAM side leaves reset 30 us later
+   initial #30100000 hr_rst0 = 0;                  // (the first commands come before: tb/sim found them lost)
+   // +hrrst=<n>: n more resets of the HyperRAM side (the framework resets it with every core reset)
+   // of 30..40 us (the chip model needs a reset as long as the one at power-on; the board holds it
+   // over 50 ms) and at least 300 us apart, each in the middle of a read with more bursts to come, so that no
+   // write is lost (a write in flight is dropped; reads resume) and the results still match SDRAMC
+   reg hr_rst_p = 0;
+   wire hr_rst = hr_rst0 | hr_rst_p;
+   wire [511:0] h_dbgx;
+   int hrrst_left = 0, hrrst_cnt = 0, hrrst_done = 0, hrrst_gap = 0;
+   initial if (!$value$plusargs("hrrst=%d", hrrst_left)) hrrst_left = 0;
+   always @(posedge hclk) begin
+      if (hr_rst_p) begin
+         if (hrrst_cnt == 0) begin hr_rst_p <= 0; hrrst_gap <= 30000; end
+         else hrrst_cnt <= hrrst_cnt - 1;
+      end else if (hrrst_gap > 0) begin
+         hrrst_gap <= hrrst_gap - 1;           // 300 us: the controller's 150 us start and some work
+      end else if (!hr_rst0 && hrrst_left > 0 && h_dbgx[271:268] == 3 &&
+                   h_dbgx[280:272] > h_dbgx[312:304] && $urandom() % 64 == 0) begin
+         hr_rst_p <= 1; hrrst_cnt <= 3000 + $urandom() % 1000; hrrst_left <= hrrst_left - 1;
+         hrrst_done <= hrrst_done + 1;
+      end
+   end
 
    // the command list
    typedef struct { int kind; int h; int b; int e; int bw; int abort_at; int seed; } cmd_t;
@@ -100,12 +121,12 @@ module tb_hrmem;
       .busy_o(h_busy), .initdone_o(h_init),
       .hr_clk_i(hclk), .hr_rst_i(hr_rst), .hr_write_o(a_wr), .hr_read_o(a_rd), .hr_address_o(a_addr),
       .hr_writedata_o(a_wd), .hr_byteenable_o(a_be), .hr_burstcount_o(a_bc), .hr_readdata_i(a_rdd),
-      .hr_readdatavalid_i(a_val), .hr_waitrequest_i(a_wait), .dbg_o());
+      .hr_readdatavalid_i(a_val), .hr_waitrequest_i(a_wait), .dbg_o(), .dbgx_o(h_dbgx));
 `ifdef M2M
    avl_m2m u_m(.clk(hclk), .rst(hr_rst), .write(a_wr), .read(a_rd), .address(a_addr), .writedata(a_wd),
       .byteenable(a_be), .burstcount(a_bc), .readdata(a_rdd), .readdatavalid(a_val), .waitrequest(a_wait));
 `else
-   avl_model u_m(.clk(hclk), .write(a_wr), .read(a_rd), .address(a_addr), .writedata(a_wd),
+   avl_model u_m(.clk(hclk), .rst(hr_rst), .write(a_wr), .read(a_rd), .address(a_addr), .writedata(a_wd),
       .byteenable(a_be), .burstcount(a_bc), .readdata(a_rdd), .readdatavalid(a_val), .waitrequest(a_wait));
 `endif
    always @(posedge clk) {h_we, h_wrdat} <= wdata(h_cur, (h_awc - h_b) & 255);
@@ -162,6 +183,9 @@ module tb_hrmem;
          while (h_busy) begin
             if (h_de && n < 260) begin res_h[i][n] = {h_arc, h_rddat}; n++; end
             t++; h_ab = cmds[i].abort_at != 0 && t == cmds[i].abort_at;
+`ifdef M2M
+            if (t == 100000) u_m.dump("x68_hrmem busy for 100000 clocks");
+`endif
             if (t > 100000) $fatal(1, "x68_hrmem: cmd %0d (kind %0d h=%04x b=%02x e=%02x bw=%0d) busy for 100000 clocks, state %0d hstate %0d",
                                    i, cmds[i].kind, cmds[i].h, cmds[i].b, cmds[i].e, cmds[i].bw, u_h.state, u_h.hstate,
                                    " htag=%0d head=%05x wcnt=%0d nlen=%0d left=%0d addr=%06x cfree=%0d ccnt=%0d tag=%0d",
@@ -234,6 +258,7 @@ module tb_hrmem;
                NOPS + NBLK, reads, words, s_busy_clk, h_busy_clk);
       $display("avalon: %0d read bursts (%0d words), %0d write bursts (%0d words)", u_m.n_rd, u_m.n_rw, u_m.n_wr, u_m.n_ww);
       $display("errors: SDRAMC %0d, x68_hrmem %0d; x68_hrmem bring-up flags %b", errs_s, errs_h, u_h.dbg_o);
+      $display("HyperRAM resets in reads: %0d", hrrst_done);
       $display("de words whose addr_wc one clock before was not addr_rc: SDRAMC %0d, x68_hrmem %0d",
                awc_err_s, awc_err_h);
       if (errs_h == 0 && awc_err_h == 0) $display("TB_HRMEM: PASS"); else $display("TB_HRMEM: FAIL");

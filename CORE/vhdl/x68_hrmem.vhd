@@ -454,6 +454,7 @@ begin
 
    p_hr : process (hr_clk_i)
       variable v_addr : unsigned(21 downto 0);
+      variable v_got  : unsigned(8 downto 0);
    begin
       if rising_edge(hr_clk_i) then
          c_rd_en <= '0';
@@ -488,7 +489,7 @@ begin
                   null;
                elsif h_left = 0 then
                   hstate <= H_IDLE;
-               elsif r_wr_free >= h_len_r then
+               elsif r_wr_free >= h_len_r and hr_rst_i = '0' then
                   h_len   <= h_len_r;
                   h_beats <= h_len_r;
                   h_be    <= "11";
@@ -549,10 +550,35 @@ begin
                end if;
          end case;
 
+         -- hr_rst (the framework resets the HyperRAM with every core reset, i.e. every press of the
+         -- reset button, clk_m2m.vhd): the controller drops the burst in flight. A read resumes
+         -- after the reset with its first word not yet received: the clk_ram side waits for all
+         -- its words (megax-hr13: after a reset the read was lost, x68_hrmem gave up after its
+         -- timeout, cachecont's read block kept the line without its words and the 68000 waited
+         -- for ever). A write is dropped: its words left in the FIFO go by their tag; the X68000 is
+         -- reset at the same time.
          if hr_rst_i = '1' then
-            hstate  <= H_IDLE;
             h_write <= '0';
             h_read  <= '0';
+            case hstate is
+               when H_RWAIT | H_RREQ =>
+                  hstate <= H_RWAIT;
+               when H_RDATA =>
+                  if not (hr_readdatavalid_i = '1' and h_beats = 1) then   -- (else done above)
+                     v_got := h_len - h_beats;
+                     if hr_readdatavalid_i = '1' then
+                        v_got := v_got + 1;
+                     end if;
+                     v_addr := h_addr + v_got;
+                     h_addr <= h_addr(21 downto 8) &
+                               ((h_addr(7 downto 0) and not h_mask) or (v_addr(7 downto 0) and h_mask));
+                     h_left <= h_left - v_got;
+                     h_prep <= '1';
+                     hstate <= H_RWAIT;
+                  end if;
+               when others =>
+                  hstate <= H_IDLE;
+            end case;
          end if;
       end if;
    end process p_hr;
