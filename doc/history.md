@@ -858,3 +858,13 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - 0.1.1 = megax-s3's source (the SDRAM build: cacheext fix, x68_boot long-reset fix, cachecont
   tag change, X68_R3PROBE false) + CORE_VERSION "0.1.1". `megax-s4` (REF megax-s3): Vivado
   segfault in synthesis (incremental); `megax-s5` the same with NO_REF_SYNTH=1.
+- `megax-s5` OK, WNS +0.187 ns, WHS +0.022 ns, 19 critical warnings (as s1/s3).
+
+## 2026-11-06 megax-hr14: resets work; HDMI flakes; 16-word bursts
+
+- `megax-hr14` on the board (the user): boots, short and long resets work. Now and then a flake
+  of HDMI snow (about one a second on average, irregular), far less than before. Likely ascal's
+  input write burst waiting behind a core burst (x68_hrmem's bursts were up to 64 words, ~0.8 us
+  with the latency; the arbiter serves ascal first but does not cut a running burst).
+- x68_hrmem G_BURST_LOG2 6 -> 4: bursts of at most 16 words (~0.3 us). tb/hrmem: PASS (model and
+  M2M=1, with and without +hrrst=12, seeds 1 and 5). `megax-hr15` = hr14 + this (REF megax-hr14).

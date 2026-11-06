@@ -51,7 +51,9 @@
 -- words of another tag: words left over from a reset of one side. (Tags alone went wrong in
 -- tb/hrmem: four aborted reads in a row, and the next read had the first one's tag.)
 -- The HyperRAM side splits a command into bursts of at most 2**G_BURST_LOG2 words, aligned,
--- one at a time, so that ascal (the arbiter's first slave) never waits long behind the core.
+-- one at a time, so that ascal (the arbiter's first slave) never waits long behind the core:
+-- 16 words, about 0.3 us with the latency (64 words on megax-hr10..14: now and then a flake of
+-- HDMI snow, ascal's input burst waiting too long; the core uses the HyperRAM < 1 % of the time).
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -59,7 +61,7 @@ use ieee.numeric_std.all;
 
 entity x68_hrmem is
    generic (
-      G_BURST_LOG2 : natural := 6           -- bursts of at most 64 words (at most 7: 8-bit burstcount)
+      G_BURST_LOG2 : natural := 4           -- bursts of at most 16 words (at most 7: 8-bit burstcount)
    );
    port (
       -- cachecont's side (SDRAMC's port list), clk_ram
