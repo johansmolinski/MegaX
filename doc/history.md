@@ -880,3 +880,17 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   Fork master fast-forwarded to develop 7eda3fd.
 - `megax-hr15` OK, WNS +0.107 ns, WHS +0.025 ns, 35 critical warnings (16-word bursts in its tree).
   Not loaded yet.
+- `megax-hr15` on the board (the user): **no snow at all**, resets work. But Super Street Fighter
+  II is slow and glitchy: at 20 MHz slower than the SDRAM build at 10 MHz.
+- Likely cost: cachecont aborts most CPU fills (the 68000 has its word, ~96 % aborted on hr10);
+  x68_hrmem honoured the abort only on the clk_ram side (skip counter) while the HyperRAM side read
+  the rest of the 128-word fill, now in 8 bursts of 16, ahead of the next fill.
+- x68_hrmem: the clk_ram side shows the read it still wants (rd_want: running & 6-bit tag,
+  registered, into hr_clk through two registers and taken when two samples agree); the HyperRAM
+  side drops a read at a burst boundary once it is no longer wanted (ended, or a later read 1..31
+  ahead); read tags 6 bits (at most 15 commands wait in the FIFO), the skip counter is gone, stale
+  words go by their tag. tb/hrmem PASS (model and M2M=1, seeds 1/3/9/21, +hrrst=12); M2M seed 1:
+  24131 HyperRAM read commands instead of 26220.
+- tb/sim with `--hr-hog 300,140` (waitrequest held 140 of every 300 clocks, about ascal's share):
+  `hog-base` (hr15's x68_hrmem) against `hog-drop`. `megax-hr16` = the drop (REF megax-hr15,
+  NO_REF_SYNTH=1).
