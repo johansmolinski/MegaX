@@ -682,11 +682,9 @@ begin
    -- Shell holds the X68000 in reset, green = the 68000 runs. Drive LED, first the HyperRAM
    -- self-test (x68_hrtest, before the machine gets the memory), blinking: red = wrong data,
    -- yellow = wrong data in bytes the masked writes left alone (byte enables), magenta = a
-   -- command hung, white = still running. Then steady (sticky, the first that happened in this
-   -- order): red = commands waited 10 ms with the HyperRAM side idle, magenta = waitrequest
-   -- held 10 ms, cyan = read words missing for 10 ms, blue = a read timed out, orange = busy
-   -- 13 ms without a break, white = no burst completed (yet); else yellow with a floppy motor,
-   -- off.
+   -- command hung, white = still running. Then yellow while a floppy motor runs, as without
+   -- X68_HRMEM (until 2026-11-06 x68_hrmem's sticky flags came first; the debug window,
+   -- tools/hrstate.py, has its counters).
    i_dbg_hr_cdc : xpm_cdc_array_single
       generic map (
          DEST_SYNC_FF   => 2,
@@ -726,12 +724,9 @@ begin
                            x"FFFF00" when main_dbg_hr_s(12) = '1' else
                            x"FF0000" when main_dbg_hr_s(10) = '1' else
                            x"FFFFFF" when main_dbg_hr_s(9) = '0' else
-                           x"FF0000" when main_dbg_hr_s(6) = '1' else
-                           x"FF00FF" when main_dbg_hr_s(4) = '1' else
-                           x"00FFFF" when main_dbg_hr_s(5) = '1' else
-                           x"0000FF" when main_dbg_hr_s(7) = '1' else
-                           x"FF8000" when main_dbg_hr_s(1) = '1' else
-                           x"FFFFFF" when main_dbg_hr_s(2) = '0' or main_dbg_hr_s(0) = '0' else
+                           -- (2026-11-06: x68_hrmem's sticky flags no longer here, the debug window
+                           -- has the same; "busy 13 ms" came with every reset, the HyperRAM's reset
+                           -- holding a read for over 50 ms)
                            x"FFFF00" when main_fd_motor = '1' else
                            x"000000";
 

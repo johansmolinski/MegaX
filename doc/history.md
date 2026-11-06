@@ -916,3 +916,8 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   before in the SDRAM build); each block is 2 RAMB18 + ~180 LUTs, 143 FFs (+16 BRAM tiles, 37.5
   were free); cachesel's LRU and the tag compares scale with it. Block debug words only for the
   first 24 blocks. `megax-hr18` (REF megax-hr17, NO_REF_SYNTH=1); tb/sim `hr32` (gvtest).
+- The user: after a reset the drive LED stays orange (hr builds): x68_hrmem's sticky "busy 13 ms"
+  flag, set by every reset now (the HyperRAM's reset holds a read for over 50 ms, as intended
+  since the reset fix). mega65.vhd: the drive LED keeps the self-test's blinking results, then
+  shows the floppy motor as without X68_HRMEM; the flags stay readable in the debug window. In the
+  build after megax-hr18.
