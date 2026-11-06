@@ -1047,3 +1047,8 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - tb/sim `hr-mt` (HRMEM, memtest in FD0, HOG 300,140, 900 ms) and `sd-mt` (SDRAM): both black, too
   short for the same reason. `hr-mt2`: the same to 2.6 s, to see whether the HyperRAM path loads the
   boot sector shifted in simulation too.
+- tb/sim `hr-mt2` (HRMEM, memtest in FD0, HOG 300,140, 2.6 s): **memtest boots** (CRTMOD 16 at
+  1960 ms, its title drawn; the first pass not done by 2.6 s). So x68_hrmem + cachecont + the
+  floppy DMA load the boot sector correctly against the Avalon HyperRAM model; the one-word shift
+  of the R3 board is not reproduced. Not in this model: the framework's arbiter, hyperram_ctrl,
+  its PHY and the real chip (tb/hrmem M2M=1 has the first two, with random commands: PASS).
