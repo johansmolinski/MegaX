@@ -1077,3 +1077,9 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - tb/sim `hr-mt3` (turbo, HOG 300,140), `hr-mt4` (HyperRAM latency 40..120, HOG 300,200),
   `hr-mt5` (both), memtest, 2.4 s: **all three boot memtest** (CRTMOD 16 at 1540 / 1969 / 1551 ms;
   no pass finished by 2.4 s). The shift is not reproduced at 20 MHz or with a slower model either.
+- megax-r3c (the first start after the load hung; a reset brought it up), CPU at **10 MHz**,
+  memtest.xdf in FD0: **memtest boots and runs, all error counts zero** over several passes. At
+  20 MHz the same board and build shift the boot sector by one word and the floppy does not boot.
+  So the HyperRAM, the M2M controller and x68_hrmem hold data; the fault is in the 20 MHz mode's
+  memory path (the 68000 and the DMAC sharing cachecont/x68_hrmem at turbo pace). tb/sim hr-mt3
+  (turbo) does not show it: the board's timing differs from the model somewhere.
