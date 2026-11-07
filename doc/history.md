@@ -1083,3 +1083,6 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   So the HyperRAM, the M2M controller and x68_hrmem hold data; the fault is in the 20 MHz mode's
   memory path (the 68000 and the DMAC sharing cachecont/x68_hrmem at turbo pace). tb/sim hr-mt3
   (turbo) does not show it: the board's timing differs from the model somewhere.
+- The same session at **20 MHz**: memtest boots and runs, all zeros as well. So the CPU speed is
+  not the trigger (the line above is wrong on that). What differs from the failing runs: this
+  session started from a power cycle (after EE31); the failing ones ran with the card in SPI mode.
