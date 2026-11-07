@@ -1179,3 +1179,13 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   every transaction waits 8 clocks, RWDS always high in CA) instead of variable, to rule the
   controller's RWDS sample in or out (the user asked whether the variable latency is the cause).
   tb/hrmem PASS (its chip model does not change with the bit). `megax-r3h` (R3, REF megax-r3g).
+  The rest of main RAM after the r3g crash: one scaler burst at **$182100-$18217F** (HyperRAM
+  0x2C1080, 64 words, aligned; `0000`/`DEDB` runs, LHES's highlighted bar with text), in the middle
+  of file data LHES had read from an HDS image (`PCM_DAT/bom6.pcm`, `SZ2_B2.MDC` around it: a disk
+  buffer). RAM above $280000 untouched (power-on pattern). So with the checker at 0 and no 64-word
+  write with bit 21 started in the controller, a scaler burst still landed in main RAM: the
+  arbiter and the controller's commands are cleared as far as the probes see; left the link to
+  the chip and the chip (the latency test next). Dump: ~/megax-work/hw/crash-r3g-ff6d28-mainram.bin.
+- `megax-r3h`: Vivado segfault in incremental synthesis (REF megax-r3g); rebuilt as `megax-r3i`
+  (REF megax-r3e): OK, WNS +0.103 ns, WHS +0.014 ns, 23 critical warnings, md5
+  fb6bcd5449e089fc19626b51f998a896.
