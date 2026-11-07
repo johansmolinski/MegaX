@@ -1115,3 +1115,5 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   more than 16 words (only the scaler's are) and those with bit 21 as well, the first kept. A
   crash with bit 21 counted at the controller is the logic; none counted is the board or chip.
   `megax-r3d` (R3).
+- `megax-r3d` (R3, REF megax-r3b) OK, WNS +0.103 ns, WHS +0.014 ns, 23 critical warnings (as
+  r3c), md5 c46dd523496c70e02ade0fd670dcdb17. Not loaded yet.
