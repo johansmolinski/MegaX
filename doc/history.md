@@ -1086,3 +1086,12 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
 - The same session at **20 MHz**: memtest boots and runs, all zeros as well. So the CPU speed is
   not the trigger (the line above is wrong on that). What differs from the failing runs: this
   session started from a power cycle (after EE31); the failing ones ran with the card in SPI mode.
+- Debug window in that session: the boot sector at $2000 **matches** memtest.xdf (only memtest's
+  own variables around $2180 differ); x68_sd 7 reads, 0 errors. The card is the user's, still in
+  the **back slot in SPI mode** (reg6 0004), as in the failing runs; the tray card (not used by
+  the core) is now native, ready (0035; empty-looking before). So SPI mode is not the trigger
+  either. Left: the power cycle. The failing runs followed several JTAG loads without one (r3b
+  twice, r3c); since the power cycle all is well. Something that survives a JTAG load but not a
+  power cycle: the HyperRAM chip's configuration registers (a one-clock write latency mismatch
+  shifts written data by one word on the 8-bit DDR chip; reads follow RWDS). To test: SSF2 now,
+  then a JTAG reload without a power cycle and memtest again.
