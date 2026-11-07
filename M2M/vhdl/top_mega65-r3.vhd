@@ -346,6 +346,7 @@ architecture synthesis of mega65_r3 is
    signal hr_core_waitrequest    : std_logic;
    signal hr_low                 : std_logic;
    signal hr_high                : std_logic;
+   signal hr_a21                 : std_logic_vector(159 downto 0);  -- M2M-UPSTREAM hr-a21-probe
 
    ---------------------------------------------------------------------------------------------
    -- qnice_clk
@@ -692,6 +693,7 @@ begin
       hr_core_waitrequest_o   => hr_core_waitrequest,
       hr_high_o               => hr_high,
       hr_low_o                => hr_low,
+      hr_a21_o                => hr_a21,                         -- M2M-UPSTREAM hr-a21-probe
 
       -- Audio
       audio_clk_o             => audio_clk,
@@ -899,6 +901,7 @@ begin
          hr_core_waitrequest_i   => hr_core_waitrequest,
          hr_high_i               => hr_high,
          hr_low_i                => hr_low,
+         hr_a21_i                => hr_a21,                      -- M2M-UPSTREAM hr-a21-probe
 
          --------------------------------------------------------------------
          -- C64 specific ports that are not supported by the M2M framework

@@ -111,3 +111,10 @@ Rules:
   `megax-zj`). It came with the temporary probe hr-debug (2026-11-02, the HyperRAM arbiter's
   lines, ascal's read state and the watchdog and burst-cut counters in `x68_trace` 0x0C-0x0F),
   which found the cause of the black HDMI and was removed again on 2026-11-03 (`megax-zr`).
+- **hr-a21-probe** (2026-11-07, temporary; `vhdl/framework.vhd` p_hr_a21 and port `hr_a21_o`,
+  `vhdl/top_mega65-r3.vhd` passes it to the core): counts the scaler's write commands and the
+  controller's, and those with HyperRAM word address bit 21, keeping the first such address. Why:
+  on the user's R3A 64-word scaler bursts landed 0x200000 words above their frame buffer address,
+  in MegaX's main RAM (crashes in LHES and SSF2); the probe tells whether the logic sends them
+  there or the address goes out right (then the board or the chip). The core reads it in
+  C_DEV_X68_DEBUG window 6. To be removed with the fix.

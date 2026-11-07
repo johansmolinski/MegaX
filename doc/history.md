@@ -1095,3 +1095,23 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   power cycle: the HyperRAM chip's configuration registers (a one-clock write latency mismatch
   shifts written data by one word on the 8-bit DDR chip; reads follow RWDS). To test: SSF2 now,
   then a JTAG reload without a power cycle and memtest again.
+- Same session: a crash in LHES again (browsing files), "Address error (SR=$2008:PC=$0007199A)". So
+  the fault comes back in a session that started clean. Main RAM at $71980-$719FF (HyperRAM
+  0x238CC0, 64 words, 64-word aligned): `4A69` x62, `4800`, `C6DB`, over code. Read as RGB565
+  pixels that is a grey run ending in a border; the scaler's frame buffer at **0x038CC0** (the same
+  address without bit 21) holds `4A69` x62, `0000`, `C6DB` (the line's last 64 pixels; one pixel of
+  another frame). The scaler writes 64-word bursts (ascal i_dpram, 128 bytes): **a whole scaler
+  burst went to its address + 0x200000 words**, the core's main RAM (word address bit 21 is set
+  for all of it, never for the frame buffer). The earlier LHES crash (`C6DB 4800 4800 4A69`x61 at
+  $76000) fits the same: 64 words, aligned. The memtest boot sector shift is not explained by it.
+  Not the cause, by reading: the M2M arbiter (one mux by last_grant for write, address and data),
+  the ISSI errata module (passes the address), hyperram_ctrl (the address taken in INIT_ST only;
+  hr-burst-cut takes reads only). The R3A's IS66WVH8M8BLL is one 64 Mbit die (no die select by an
+  address bit). The R3 build meets timing on hr_clk (+0.79 ns) and at the HyperRAM pins
+  (+0.70 ns). Left: a logic path not yet seen, or the chip mis-sampling CA[34] (A21, DQ2 in the
+  falling half of the first command clock) on this board.
+- Probe M2M-UPSTREAM hr-a21-probe (framework.vhd p_hr_a21, window 6, tools in the scratchpad):
+  the scaler's write commands and those with bit 21; the controller's write commands, those of
+  more than 16 words (only the scaler's are) and those with bit 21 as well, the first kept. A
+  crash with bit 21 counted at the controller is the logic; none counted is the board or chip.
+  `megax-r3d` (R3).

@@ -102,6 +102,9 @@ port (
    hr_core_waitrequest_i   : in  std_logic;
    hr_high_i               : in  std_logic;  -- Core is too fast
    hr_low_i                : in  std_logic;  -- Core is too slow
+   -- R3 bring-up (temporary, M2M-UPSTREAM hr-a21-probe): the framework's write commands with
+   -- address bit 21 (hr_clk; window 6 of C_DEV_X68_DEBUG, framework.vhd p_hr_a21)
+   hr_a21_i                : in  std_logic_vector(159 downto 0) := (others => '0');
 
    --------------------------------------------------------------------------------------------------------
    -- Video Clock Domain
@@ -376,6 +379,7 @@ signal main_dbg_hrx           : std_logic_vector(511 downto 0); -- R3 bring-up: 
 type t_hrx_words is array (0 to 31) of std_logic_vector(15 downto 0);
 signal qnice_hrx              : t_hrx_words;                    -- ... and memcont's command, in qnice_clk
 signal qnice_hrx_mem          : std_logic_vector(51 downto 0);
+signal qnice_hrx_a21          : std_logic_vector(159 downto 0); -- ... and the framework's hr-a21-probe
 signal main_dbg_cache         : std_logic_vector(1023 downto 0); -- R3 bring-up: cachecont's read blocks
 type t_cache_words is array (0 to 63) of std_logic_vector(15 downto 0);
 signal qnice_cache            : t_cache_words;
@@ -888,6 +892,7 @@ begin
             qnice_hrx(i) <= main_dbg_hrx(16 * i + 15 downto 16 * i);
          end loop;
          qnice_hrx_mem <= main_dbg_mem;
+         qnice_hrx_a21 <= hr_a21_i;
          for i in 0 to 63 loop
             qnice_cache(i) <= main_dbg_cache(16 * i + 15 downto 16 * i);
          end loop;
@@ -923,6 +928,15 @@ begin
             -- R3 bring-up (temporary): window 5, words 0..31 x68_hrmem's state (dbgx_o), 32..35
             -- memcont's current command (dbg_mem), 64..127 cachecont's read blocks (dbg2_o);
             -- sampled as they are (CORE.xdc: false path), read them twice (tools/hrstate.py)
+            -- window 6, words 0..9: the framework's hr-a21-probe (framework.vhd p_hr_a21), as window 5
+            if qnice_dev_addr_i(27 downto 12) = x"0006" then
+               if unsigned(qnice_dev_addr_i(3 downto 0)) < 10 then
+                  qnice_dev_data_o <= qnice_hrx_a21(16 * to_integer(unsigned(qnice_dev_addr_i(3 downto 0))) + 15 downto
+                                                    16 * to_integer(unsigned(qnice_dev_addr_i(3 downto 0))));
+               else
+                  qnice_dev_data_o <= x"0000";
+               end if;
+            end if;
             if qnice_dev_addr_i(27 downto 12) = x"0005" then
                if qnice_dev_addr_i(6) = '1' then
                   qnice_dev_data_o <= qnice_cache(to_integer(unsigned(qnice_dev_addr_i(5 downto 0))));

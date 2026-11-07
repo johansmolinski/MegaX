@@ -220,6 +220,10 @@ port (
    hr_core_waitrequest_o   : out   std_logic;
    hr_high_o               : out   std_logic; -- Core is too fast
    hr_low_o                : out   std_logic; -- Core is too slow
+   -- M2M-UPSTREAM hr-a21-probe (MegaX 2026-11-07, temporary): write commands with address bit 21
+   -- (the core's main RAM in MegaX's R3 layout) from the scaler and at the controller (hr_clk);
+   -- see p_hr_a21
+   hr_a21_o                : out   std_logic_vector(159 downto 0) := (others => '0');
 
    -- QNICE control signals
    qnice_dvi_i             : in    std_logic;
@@ -313,6 +317,17 @@ signal sys_pps                : std_logic;               -- One pulse per second
 
 signal qnice_rst              : std_logic;
 signal hr_rst                 : std_logic;
+-- M2M-UPSTREAM hr-a21-probe (MegaX 2026-11-07, temporary): see p_hr_a21
+signal a21_dig_left           : unsigned(7 downto 0) := (others => '0');
+signal a21_out_left           : unsigned(7 downto 0) := (others => '0');
+signal a21_dig_cmd            : unsigned(15 downto 0) := (others => '0');
+signal a21_dig_bad            : unsigned(15 downto 0) := (others => '0');
+signal a21_out_cmd            : unsigned(15 downto 0) := (others => '0');
+signal a21_out_big            : unsigned(15 downto 0) := (others => '0');
+signal a21_out_bad            : unsigned(15 downto 0) := (others => '0');
+signal a21_dig_addr           : std_logic_vector(31 downto 0) := (others => '0');
+signal a21_out_addr           : std_logic_vector(31 downto 0) := (others => '0');
+signal a21_out_bc             : std_logic_vector(7 downto 0) := (others => '0');
 signal audio_rst              : std_logic;
 signal hdmi_rst               : std_logic;
 
@@ -746,6 +761,63 @@ begin
    --------------------------------------------------------
    -- HyperRAM clock domain: hr_clk
    --------------------------------------------------------
+
+   -- M2M-UPSTREAM hr-a21-probe (MegaX 2026-11-07, temporary): on the user's R3 board 64-word
+   -- scaler bursts landed 0x200000 words above their frame buffer address, in the core's main
+   -- RAM (MegaX doc/history.md). A command is a write's first beat (the beats are counted down)
+   -- or a read. The scaler writes bursts of 64, the core at most 16, QNICE 1: a write command of
+   -- more than 16 words with bit 21 at the controller's input is a scaler burst sent to the
+   -- wrong address by the logic. Counted (16 bits, wrapping), the first such address kept:
+   -- 0 scaler write commands, 1 those with bit 21, 2 write commands at the controller,
+   -- 3 those of more than 16 words, 4 those with bit 21 as well, 5/6 the first of them (low,
+   -- high), 7 its burst count, 8/9 the first scaler command with bit 21 (low, high)
+   p_hr_a21 : process (hr_clk)
+   begin
+      if rising_edge(hr_clk) then
+         if hr_dig_write = '1' and hr_dig_waitrequest = '0' then
+            if a21_dig_left = 0 then
+               a21_dig_left <= unsigned(hr_dig_burstcount) - 1;
+               a21_dig_cmd  <= a21_dig_cmd + 1;
+               if hr_dig_address(21) = '1' then
+                  if a21_dig_bad = 0 then
+                     a21_dig_addr <= hr_dig_address;
+                  end if;
+                  a21_dig_bad <= a21_dig_bad + 1;
+               end if;
+            else
+               a21_dig_left <= a21_dig_left - 1;
+            end if;
+         end if;
+         if hr_read = '1' and hr_waitrequest = '0' then
+            a21_out_left <= (others => '0');
+         elsif hr_write = '1' and hr_waitrequest = '0' then
+            if a21_out_left = 0 then
+               a21_out_left <= unsigned(hr_burstcount) - 1;
+               a21_out_cmd  <= a21_out_cmd + 1;
+               if unsigned(hr_burstcount) > 16 then
+                  a21_out_big <= a21_out_big + 1;
+                  if hr_address(21) = '1' then
+                     if a21_out_bad = 0 then
+                        a21_out_addr <= hr_address;
+                        a21_out_bc   <= hr_burstcount;
+                     end if;
+                     a21_out_bad <= a21_out_bad + 1;
+                  end if;
+               end if;
+            else
+               a21_out_left <= a21_out_left - 1;
+            end if;
+         end if;
+         if hr_rst = '1' then
+            a21_dig_left <= (others => '0');
+            a21_out_left <= (others => '0');
+         end if;
+         hr_a21_o <= a21_dig_addr & x"00" & a21_out_bc & a21_out_addr &
+                     std_logic_vector(a21_out_bad) & std_logic_vector(a21_out_big) &
+                     std_logic_vector(a21_out_cmd) & std_logic_vector(a21_dig_bad) &
+                     std_logic_vector(a21_dig_cmd);
+      end if;
+   end process p_hr_a21;
 
    i_avm_arbit_general : entity work.avm_arbit_general
       generic map (
