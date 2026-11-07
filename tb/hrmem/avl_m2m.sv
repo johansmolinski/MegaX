@@ -1,8 +1,9 @@
 // MegaX tb/hrmem (M2M=1): the core port as on the board. x68_hrmem's Avalon lines go to slave 1
 // of the framework's real arbiter and HyperRAM controller logic (m2m_hr.vhd, synthesised by
 // ghdl); slave 0 is a QNICE-like master (single-word reads and writes, one at a time, as through
-// avm_fifo), slave 2 a scaler-like master (128-word read and write bursts, ascal behind
-// avm_decrease), each in its own area and checking its own data; a hang of either is reported
+// avm_fifo), slave 2 a scaler-like master (64-word read and write bursts, ascal's 128 bytes behind
+// avm_decrease; a write burst pauses at random after every 8th word, as avm_decrease does when
+// ascal's next 128-bit word is late), each in its own area and checking its own data; a hang of either is reported
 // (on the board a lost QNICE response freezes the Shell). The PHY and the chip are modelled at
 // the controller's hb_* lines: hyperram_tx puts the clock out on clk_del (90 degrees), so the chip
 // sees the controller's dq word of clock t with its clock pulse of clock t+1.
@@ -31,7 +32,7 @@ module avl_m2m (
    m2m_hr u_hr(.clk_i(clk), .rst_i(rst),
       .s_write_i({d_write, write, q_write}), .s_read_i({d_read, read, q_read}),
       .s_address_i({d_addr, address, q_addr}), .s_writedata_i({d_wd, writedata, q_wd}),
-      .s_byteenable_i({2'b11, byteenable, 2'b11}), .s_burstcount_i({8'd128, burstcount, 8'd1}),
+      .s_byteenable_i({2'b11, byteenable, 2'b11}), .s_burstcount_i({8'd64, burstcount, 8'd1}),
       .s_readdata_o(s_rdata), .s_readdatavalid_o(s_rdv), .s_waitrequest_o(s_wait),
       .hb_rstn_o(hb_rstn), .hb_csn_o(hb_csn), .hb_ck_ddr_o(hb_ck), .hb_dq_ddr_in_i(hb_dq_in),
       .hb_dq_ddr_out_o(hb_dq_out), .hb_dq_oe_o(hb_dq_oe), .hb_dq_ie_i(hb_dq_ie),
@@ -198,9 +199,9 @@ module avl_m2m (
    end
 
    ////////////////////////////////////////////////////////////////////////////////////////
-   // the scaler: 128-word bursts in 0x000000..0x03FFFF, one every 200..600 clocks
+   // the scaler: 64-word bursts in 0x000000..0x03FFFF, one every 200..600 clocks
    reg [15:0] d_shadow [int];
-   int d_ops = 0, d_maxwait = 0, d_st = 0, d_idle = 300, d_t = 0, d_k = 0, d_seed = 0;
+   int d_ops = 0, d_maxwait = 0, d_st = 0, d_idle = 300, d_t = 0, d_k = 0, d_seed = 0, d_pause = 0;
    always @(posedge clk) begin
       if (rst) begin
          d_st <= 0; d_write <= 0; d_read <= 0;
@@ -208,18 +209,22 @@ module avl_m2m (
          0: if (d_idle > 0) d_idle <= d_idle - 1;
             else begin
                int sd = $urandom();
-               d_addr <= ($urandom() % 'h40000) & ~32'h7F;
+               d_addr <= ($urandom() % 'h40000) & ~32'h3F;
                d_t <= 0; d_k <= 0;
                if ($urandom() % 2) begin d_seed <= sd; d_wd <= sd[15:0]; d_write <= 1; d_st <= 1; end
                else begin d_read <= 1; d_st <= 2; end
             end
          1: begin                                   // write beats
                d_t <= d_t + 1;
-               if (!s_wait[2]) begin
+               if (d_pause > 0) begin
+                  d_pause <= d_pause - 1;
+                  if (d_pause == 1) d_write <= 1;
+               end else if (!s_wait[2]) begin
                   d_shadow[d_addr + d_k] = d_wd;
                   d_k <= d_k + 1;
                   d_wd <= 16'(d_seed + (d_k + 1) * 40503);
-                  if (d_k == 127) begin d_write <= 0; d_st <= 4; end
+                  if (d_k == 63) begin d_write <= 0; d_st <= 4; end
+                  else if (d_k % 8 == 7 && $urandom() % 3 == 0) begin d_write <= 0; d_pause <= 1 + $urandom() % 8; end
                end else if (d_t > 50000) begin dump($sformatf("scaler: write burst stuck at beat %0d", d_k)); $fatal(1); end
             end
          2: begin                                   // read command
@@ -233,7 +238,7 @@ module avl_m2m (
                   if (d_shadow.exists(d_addr + d_k) && s_rdata[47:32] !== d_shadow[d_addr + d_k])
                      begin dump($sformatf("scaler: read %06x = %04x, expected %04x", d_addr + d_k, s_rdata[47:32], d_shadow[d_addr + d_k])); $fatal(1); end
                   d_k <= d_k + 1;
-                  if (d_k == 127) d_st <= 4;
+                  if (d_k == 63) d_st <= 4;
                end else if (d_t > 50000) begin dump($sformatf("scaler: read burst %06x stuck after %0d words", d_addr, d_k)); $fatal(1); end
             end
          default: begin

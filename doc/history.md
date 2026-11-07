@@ -1117,3 +1117,31 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   `megax-r3d` (R3).
 - `megax-r3d` (R3, REF megax-r3b) OK, WNS +0.103 ns, WHS +0.014 ns, 23 critical warnings (as
   r3c), md5 c46dd523496c70e02ade0fd670dcdb17. Not loaded yet.
+- `megax-r3d` on the R3A (2026-11-07): SSF2 runs (it crashed on r3b), about as fast as the R6's
+  HyperRAM builds; no hang at the first start. Probe before a crash: thousands of scaler write
+  commands, none with bit 21, none at the controller either. Then an LHES crash at PC $7605A: main
+  RAM $76000-$7607F (HyperRAM 0x23B000, 64 words, aligned) `C6DB 4800 4800` `4A69`x61, the same
+  words as the earlier $76000 crash; the code goes on intact at $76080. The probe after the
+  crash: still **no write command with bit 21 left the arbiter** (~30 000 more scaler bursts).
+  - The bit-21 reading was wrong: the frame buffer at 0x03B000 holds `4A69 DEDB DEDB ...`, and
+    LHES's flat background (`4A69`) fills 2678 of the frame buffer's 64-word blocks, so "the same
+    address without bit 21" matched by chance (also at $7199A). The burst is scaler data from
+    some line of the picture, not its own address + 0x200000.
+  - No address-line fault either: the unused HyperRAM areas a flipped A19 (0x080000-0x0FFFFF)
+    or A20 (0x140000-0x15FFFF, the frame buffer's upper third + 0x100000) would hit still hold the
+    chip's power-on pattern (`5555`/`AAAA`); main RAM 0x200000-0x25FFFF (all a scaler address with
+    bit 21 could reach) holds exactly one scaler burst, the one at $76000.
+  - So: about one burst per session, and every one seen so far on the code the 68000 was
+    running. The address comes from the core's reads, the data from the scaler, and the mixing
+    happens behind the arbiter: hyperram_errata (forces write high for one beat after a 1-word
+    write, with whatever address and burst count the arbiter shows then), hyperram_config, or
+    hyperram_ctrl with hr-burst-cut. Not a board fault.
+- tb/hrmem's scaler model now as on the board: 64-word bursts (ascal's 128 bytes) with random
+  pauses after every 8th word (avm_decrease waiting for ascal's next 128-bit word). M2M=1, 200
+  seeds on the laptop (Verilator 5.032; Fedora's 5.046 still runs it wrongly, also unchanged):
+  PASS, ~460 000 scaler bursts; the board makes ~270 000 a second, so a rare case is out of reach.
+- Probe M2M-UPSTREAM hr-ctrl-probe (hyperram_ctrl p_dbg, window 6 words 2..9; hr-a21-probe's words
+  2..9 go): the write commands the controller starts, those with bit 21 and more than 16 words
+  (the first's address and burst count kept), those whose first word has byteenable `00`
+  (hyperram_errata's forced beat as a command of its own), the write bursts cut by a read.
+  `megax-r3e` (R3, REF megax-r3d).
