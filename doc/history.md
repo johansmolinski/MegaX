@@ -1161,3 +1161,9 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   kept). tb/hrmem carries the same code (m2m_hr.vhd, counts in the final line and the dump): 0 on
   200 seeds and +hrrst=12; with the arbiter's s0 write burst ended one beat early on purpose it
   counts 1098/0/19/0/118. `megax-r3f` (R3, REF megax-r3e).
+- `megax-r3f` (R3): **timing failed**, WNS -4.108 ns on hr_clk: p_hr_chk's counters, 19 logic levels
+  (the counts were variables incremented once per port and kind in one clock: a chain of adders).
+  Not loaded. Now a flag per kind and the cycle's first violation are registered and the counts
+  follow a clock later, and the arbiter's lines are registered first (the checker runs one clock
+  behind). tb/hrmem: 0 on 200 seeds and +hrrst=12, the broken arbiter gives the same counts as
+  before. `megax-r3g` (R3, REF megax-r3e).

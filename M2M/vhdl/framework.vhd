@@ -339,6 +339,17 @@ signal chk_rleft              : t_chk_u10 := (others => (others => '0'));
 signal chk_out_wleft          : unsigned(7 downto 0) := (others => '0');
 signal chk_cnt                : t_chk_cnt := (others => (others => '0'));
 signal chk_got                : std_logic := '0';
+signal chk_ev                 : std_logic_vector(5 downto 1) := (others => '0');
+signal chk_rec                : std_logic_vector(47 downto 0) := (others => '0');
+-- (the ports' and the output's lines, registered: the checker works one clock behind)
+signal chk_p_w, chk_p_r       : std_logic_vector(2 downto 0) := (others => '0');
+signal chk_p_wt, chk_p_rdv    : std_logic_vector(2 downto 0) := (others => '0');
+signal chk_p_a                : std_logic_vector(3*24-1 downto 0) := (others => '0');
+signal chk_p_b                : std_logic_vector(3*8-1 downto 0) := (others => '0');
+signal chk_p_ow, chk_p_or     : std_logic := '0';
+signal chk_p_owt, chk_p_rst   : std_logic := '0';
+signal chk_p_oa               : std_logic_vector(23 downto 0) := (others => '0');
+signal chk_p_ob               : std_logic_vector(7 downto 0) := (others => '0');
 signal chk_first              : std_logic_vector(47 downto 0) := (others => '0');
 signal chk_core_w             : unsigned(15 downto 0) := (others => '0');
 signal audio_rst              : std_logic;
@@ -856,41 +867,58 @@ begin
    -- 4 a write beat taken from one port while another port still has read words due,
    -- 5 a read at the arbiter's output while the output's write burst is open (hr-burst-cut).
    -- The first violation is kept: kind, port, other port, the beat's address and burst count.
+   -- (All one clock behind the arbiter: its lines are registered first, for timing.)
    p_hr_chk : process (hr_clk)
       variable v_w, v_r, v_wt, v_rdv : std_logic_vector(2 downto 0);
-      variable v_a   : std_logic_vector(3*32-1 downto 0);
+      variable v_a   : std_logic_vector(3*24-1 downto 0);
       variable v_b   : std_logic_vector(3*8-1 downto 0);
-      variable v_cnt : t_chk_cnt;
-      variable v_got : std_logic;
+      variable v_ev  : std_logic_vector(5 downto 1);
+      variable v_rec : std_logic_vector(47 downto 0);
+      variable v_any : std_logic;
       variable v_rl  : unsigned(9 downto 0);
 
+      -- (a flag per kind and the cycle's first violation, registered; the counts follow a clock
+      -- later: incrementing a counter once per port in one clock made a chain of adders)
       procedure viol(k : natural; i : natural; j : natural) is
       begin
-         if v_cnt(k) /= x"FFFF" then
-            v_cnt(k) := v_cnt(k) + 1;
-         end if;
-         if v_got = '0' then
-            v_got     := '1';
+         v_ev(k) := '1';
+         if v_any = '0' then
+            v_any := '1';
             if i < 3 then
-               chk_first(47 downto 16) <= v_b(8*i+7 downto 8*i) & v_a(32*i+23 downto 32*i);
+               v_rec(47 downto 16) := v_b(8*i+7 downto 8*i) & v_a(24*i+23 downto 24*i);
             else                                        -- 3: the arbiter's output
-               chk_first(47 downto 16) <= hr_burstcount & hr_address(23 downto 0);
+               v_rec(47 downto 16) := chk_p_ob & chk_p_oa;
             end if;
-            chk_first(15 downto 0) <= std_logic_vector(to_unsigned(k, 8)) &
-                                      std_logic_vector(to_unsigned(i, 4)) &
-                                      std_logic_vector(to_unsigned(j, 4));
+            v_rec(15 downto 0) := std_logic_vector(to_unsigned(k, 8)) &
+                                  std_logic_vector(to_unsigned(i, 4)) &
+                                  std_logic_vector(to_unsigned(j, 4));
          end if;
       end procedure viol;
    begin
       if rising_edge(hr_clk) then
-         v_w   := hr_dig_write         & hr_core_write_i         & hr_qnice_write;
-         v_r   := hr_dig_read          & hr_core_read_i          & hr_qnice_read;
-         v_wt  := hr_dig_waitrequest   & hr_core_waitrequest_o   & hr_qnice_waitrequest;
-         v_rdv := hr_dig_readdatavalid & hr_core_readdatavalid_o & hr_qnice_readdatavalid;
-         v_a   := hr_dig_address       & hr_core_address_i       & hr_qnice_address;
-         v_b   := hr_dig_burstcount    & hr_core_burstcount_i    & hr_qnice_burstcount;
-         v_cnt := chk_cnt;
-         v_got := chk_got;
+         chk_p_w   <= hr_dig_write         & hr_core_write_i         & hr_qnice_write;
+         chk_p_r   <= hr_dig_read          & hr_core_read_i          & hr_qnice_read;
+         chk_p_wt  <= hr_dig_waitrequest   & hr_core_waitrequest_o   & hr_qnice_waitrequest;
+         chk_p_rdv <= hr_dig_readdatavalid & hr_core_readdatavalid_o & hr_qnice_readdatavalid;
+         chk_p_a   <= hr_dig_address(23 downto 0) & hr_core_address_i(23 downto 0) &
+                      hr_qnice_address(23 downto 0);
+         chk_p_b   <= hr_dig_burstcount    & hr_core_burstcount_i    & hr_qnice_burstcount;
+         chk_p_ow  <= hr_write;
+         chk_p_or  <= hr_read;
+         chk_p_owt <= hr_waitrequest;
+         chk_p_oa  <= hr_address(23 downto 0);
+         chk_p_ob  <= hr_burstcount;
+         chk_p_rst <= hr_rst;
+
+         v_w   := chk_p_w;
+         v_r   := chk_p_r;
+         v_wt  := chk_p_wt;
+         v_rdv := chk_p_rdv;
+         v_a   := chk_p_a;
+         v_b   := chk_p_b;
+         v_ev  := (others => '0');
+         v_rec := (others => '0');
+         v_any := '0';
 
          for i in 0 to 2 loop
             if v_w(i) = '1' and v_wt(i) = '0' then
@@ -931,26 +959,35 @@ begin
             chk_rleft(i) <= v_rl;
          end loop;
 
-         if hr_write = '1' and hr_waitrequest = '0' then
+         if chk_p_ow = '1' and chk_p_owt = '0' then
             if chk_out_wleft = 0 then
-               chk_out_wleft <= unsigned(hr_burstcount) - 1;
+               chk_out_wleft <= unsigned(chk_p_ob) - 1;
             else
                chk_out_wleft <= chk_out_wleft - 1;
             end if;
          end if;
-         if hr_read = '1' and hr_waitrequest = '0' and chk_out_wleft /= 0 then
+         if chk_p_or = '1' and chk_p_owt = '0' and chk_out_wleft /= 0 then
             viol(5, 3, 3);
          end if;
 
          -- the controller drops a burst in flight at hr_rst
-         if hr_rst = '1' then
+         if chk_p_rst = '1' then
             chk_wleft     <= (others => (others => '0'));
             chk_rleft     <= (others => (others => '0'));
             chk_out_wleft <= (others => '0');
          end if;
 
-         chk_cnt <= v_cnt;
-         chk_got <= v_got;
+         chk_ev  <= v_ev;
+         chk_rec <= v_rec;
+         for k in 1 to 5 loop
+            if chk_ev(k) = '1' and chk_cnt(k) /= x"FFFF" then
+               chk_cnt(k) <= chk_cnt(k) + 1;
+            end if;
+         end loop;
+         if chk_ev /= "00000" and chk_got = '0' then
+            chk_got   <= '1';
+            chk_first <= chk_rec;
+         end if;
       end if;
    end process p_hr_chk;
 

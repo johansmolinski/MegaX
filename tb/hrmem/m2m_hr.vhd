@@ -62,6 +62,17 @@ architecture sim of m2m_hr is
    signal chk_out_wleft          : unsigned(7 downto 0) := (others => '0');
    signal chk_cnt                : t_chk_cnt := (others => (others => '0'));
    signal chk_got                : std_logic := '0';
+   signal chk_ev                 : std_logic_vector(5 downto 1) := (others => '0');
+   signal chk_rec                : std_logic_vector(47 downto 0) := (others => '0');
+   -- (the ports' and the output's lines, registered: the checker works one clock behind)
+   signal chk_p_w, chk_p_r       : std_logic_vector(2 downto 0) := (others => '0');
+   signal chk_p_wt, chk_p_rdv    : std_logic_vector(2 downto 0) := (others => '0');
+   signal chk_p_a                : std_logic_vector(3*24-1 downto 0) := (others => '0');
+   signal chk_p_b                : std_logic_vector(3*8-1 downto 0) := (others => '0');
+   signal chk_p_ow, chk_p_or     : std_logic := '0';
+   signal chk_p_owt, chk_p_rst   : std_logic := '0';
+   signal chk_p_oa               : std_logic_vector(23 downto 0) := (others => '0');
+   signal chk_p_ob               : std_logic_vector(7 downto 0) := (others => '0');
    signal chk_first              : std_logic_vector(47 downto 0) := (others => '0');
    signal chk_core_w             : unsigned(15 downto 0) := (others => '0');
    signal chk_flat : std_logic_vector(79 downto 0);
@@ -183,39 +194,54 @@ begin
 
    p_hr_chk : process (clk_i)
       variable v_w, v_r, v_wt, v_rdv : std_logic_vector(2 downto 0);
-      variable v_a   : std_logic_vector(3*32-1 downto 0);
+      variable v_a   : std_logic_vector(3*24-1 downto 0);
       variable v_b   : std_logic_vector(3*8-1 downto 0);
-      variable v_cnt : t_chk_cnt;
-      variable v_got : std_logic;
+      variable v_ev  : std_logic_vector(5 downto 1);
+      variable v_rec : std_logic_vector(47 downto 0);
+      variable v_any : std_logic;
       variable v_rl  : unsigned(9 downto 0);
 
+      -- (a flag per kind and the cycle's first violation, registered; the counts follow a clock
+      -- later: incrementing a counter once per port in one clock made a chain of adders)
       procedure viol(k : natural; i : natural; j : natural) is
       begin
-         if v_cnt(k) /= x"FFFF" then
-            v_cnt(k) := v_cnt(k) + 1;
-         end if;
-         if v_got = '0' then
-            v_got     := '1';
+         v_ev(k) := '1';
+         if v_any = '0' then
+            v_any := '1';
             if i < 3 then
-               chk_first(47 downto 16) <= v_b(8*i+7 downto 8*i) & v_a(32*i+23 downto 32*i);
+               v_rec(47 downto 16) := v_b(8*i+7 downto 8*i) & v_a(24*i+23 downto 24*i);
             else                                        -- 3: the arbiter's output
-               chk_first(47 downto 16) <= a_bc & a_addr(23 downto 0);
+               v_rec(47 downto 16) := chk_p_ob & chk_p_oa;
             end if;
-            chk_first(15 downto 0) <= std_logic_vector(to_unsigned(k, 8)) &
-                                      std_logic_vector(to_unsigned(i, 4)) &
-                                      std_logic_vector(to_unsigned(j, 4));
+            v_rec(15 downto 0) := std_logic_vector(to_unsigned(k, 8)) &
+                                  std_logic_vector(to_unsigned(i, 4)) &
+                                  std_logic_vector(to_unsigned(j, 4));
          end if;
       end procedure viol;
    begin
       if rising_edge(clk_i) then
-         v_w   := s_write_i;
-         v_r   := s_read_i;
-         v_wt  := s_waitrequest_o;
-         v_rdv := s_readdatavalid_o;
-         v_a   := s_address_i;
-         v_b   := s_burstcount_i;
-         v_cnt := chk_cnt;
-         v_got := chk_got;
+         chk_p_w   <= s_write_i;
+         chk_p_r   <= s_read_i;
+         chk_p_wt  <= s_waitrequest_o;
+         chk_p_rdv <= s_readdatavalid_o;
+         chk_p_a   <= s_address_i(87 downto 64) & s_address_i(55 downto 32) & s_address_i(23 downto 0);
+         chk_p_b   <= s_burstcount_i;
+         chk_p_ow  <= a_write;
+         chk_p_or  <= a_read;
+         chk_p_owt <= a_wait;
+         chk_p_oa  <= a_addr(23 downto 0);
+         chk_p_ob  <= a_bc;
+         chk_p_rst <= rst_i;
+
+         v_w   := chk_p_w;
+         v_r   := chk_p_r;
+         v_wt  := chk_p_wt;
+         v_rdv := chk_p_rdv;
+         v_a   := chk_p_a;
+         v_b   := chk_p_b;
+         v_ev  := (others => '0');
+         v_rec := (others => '0');
+         v_any := '0';
 
          for i in 0 to 2 loop
             if v_w(i) = '1' and v_wt(i) = '0' then
@@ -256,26 +282,35 @@ begin
             chk_rleft(i) <= v_rl;
          end loop;
 
-         if a_write = '1' and a_wait = '0' then
+         if chk_p_ow = '1' and chk_p_owt = '0' then
             if chk_out_wleft = 0 then
-               chk_out_wleft <= unsigned(a_bc) - 1;
+               chk_out_wleft <= unsigned(chk_p_ob) - 1;
             else
                chk_out_wleft <= chk_out_wleft - 1;
             end if;
          end if;
-         if a_read = '1' and a_wait = '0' and chk_out_wleft /= 0 then
+         if chk_p_or = '1' and chk_p_owt = '0' and chk_out_wleft /= 0 then
             viol(5, 3, 3);
          end if;
 
          -- the controller drops a burst in flight at rst_i
-         if rst_i = '1' then
+         if chk_p_rst = '1' then
             chk_wleft     <= (others => (others => '0'));
             chk_rleft     <= (others => (others => '0'));
             chk_out_wleft <= (others => '0');
          end if;
 
-         chk_cnt <= v_cnt;
-         chk_got <= v_got;
+         chk_ev  <= v_ev;
+         chk_rec <= v_rec;
+         for k in 1 to 5 loop
+            if chk_ev(k) = '1' and chk_cnt(k) /= x"FFFF" then
+               chk_cnt(k) <= chk_cnt(k) + 1;
+            end if;
+         end loop;
+         if chk_ev /= "00000" and chk_got = '0' then
+            chk_got   <= '1';
+            chk_first <= chk_rec;
+         end if;
       end if;
    end process p_hr_chk;
 
