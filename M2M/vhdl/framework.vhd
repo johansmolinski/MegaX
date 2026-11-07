@@ -328,6 +328,8 @@ signal a21_out_bad            : unsigned(15 downto 0) := (others => '0');
 signal a21_dig_addr           : std_logic_vector(31 downto 0) := (others => '0');
 signal a21_out_addr           : std_logic_vector(31 downto 0) := (others => '0');
 signal a21_out_bc             : std_logic_vector(7 downto 0) := (others => '0');
+-- M2M-UPSTREAM hr-ctrl-probe (MegaX 2026-11-07, temporary): hyperram_ctrl's p_dbg
+signal hr_ctrl_dbg            : std_logic_vector(127 downto 0);
 signal audio_rst              : std_logic;
 signal hdmi_rst               : std_logic;
 
@@ -812,10 +814,13 @@ begin
             a21_dig_left <= (others => '0');
             a21_out_left <= (others => '0');
          end if;
-         hr_a21_o <= a21_dig_addr & x"00" & a21_out_bc & a21_out_addr &
-                     std_logic_vector(a21_out_bad) & std_logic_vector(a21_out_big) &
-                     std_logic_vector(a21_out_cmd) & std_logic_vector(a21_dig_bad) &
-                     std_logic_vector(a21_dig_cmd);
+         -- M2M-UPSTREAM hr-ctrl-probe (MegaX 2026-11-07, temporary): words 2..9 are now
+         -- hyperram_ctrl's p_dbg, word 1 the commands of 4 above
+         -- hr_a21_o <= a21_dig_addr & x"00" & a21_out_bc & a21_out_addr &
+         --             std_logic_vector(a21_out_bad) & std_logic_vector(a21_out_big) &
+         --             std_logic_vector(a21_out_cmd) & std_logic_vector(a21_dig_bad) &
+         --             std_logic_vector(a21_dig_cmd);
+         hr_a21_o <= hr_ctrl_dbg & std_logic_vector(a21_out_bad) & std_logic_vector(a21_dig_cmd);
       end if;
    end process p_hr_a21;
 
@@ -1161,6 +1166,7 @@ begin
          avm_waitrequest_o   => hr_waitrequest,
          count_long_o        => hr_count_long,
          count_short_o       => hr_count_short,
+         dbg_o               => hr_ctrl_dbg,          -- M2M-UPSTREAM hr-ctrl-probe
          hr_resetn_o         => hr_reset_o,
          hr_csn_o            => hr_cs0_o,
          hr_ck_o             => hr_clk_p_o,

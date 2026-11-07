@@ -44,6 +44,9 @@ entity hyperram is
       count_long_o        : out   unsigned(31 downto 0);
       count_short_o       : out   unsigned(31 downto 0);
 
+      -- M2M-UPSTREAM hr-ctrl-probe (MegaX 2026-11-07, temporary): hyperram_ctrl's p_dbg
+      dbg_o               : out   std_logic_vector(127 downto 0) := (others => '0');
+
       -- HyperRAM device interface
       hr_resetn_o         : out   std_logic;
       hr_csn_o            : out   std_logic;
@@ -198,6 +201,7 @@ begin
          avm_waitrequest_o   => cfg_waitrequest,
          count_long_o        => count_long_o,
          count_short_o       => count_short_o,
+         dbg_o               => dbg_o,               -- M2M-UPSTREAM hr-ctrl-probe
          hb_rstn_o           => ctrl_rstn,
          hb_csn_o            => ctrl_csn,
          hb_ck_ddr_o         => ctrl_ck_ddr,

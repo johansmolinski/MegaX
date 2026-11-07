@@ -34,6 +34,9 @@ entity hyperram_ctrl is
       count_long_o        : out   unsigned(31 downto 0);
       count_short_o       : out   unsigned(31 downto 0);
 
+      -- M2M-UPSTREAM hr-ctrl-probe (MegaX 2026-11-07, temporary): see p_dbg
+      dbg_o               : out   std_logic_vector(127 downto 0) := (others => '0');
+
       -- HyperBus control signals
       hb_rstn_o           : out   std_logic;
       hb_csn_o            : out   std_logic;
@@ -102,7 +105,49 @@ architecture synthesis of hyperram_ctrl is
    constant C_RST_PULSE : integer := 50;      -- 500 ns at 100 MHz
    signal   rst_count   : integer range 0 to C_RST_PULSE := 0;
 
+   -- M2M-UPSTREAM hr-ctrl-probe (MegaX 2026-11-07, temporary): see p_dbg
+   signal   dbg_wcmd    : unsigned(15 downto 0) := (others => '0');
+   signal   dbg_bad     : unsigned(15 downto 0) := (others => '0');
+   signal   dbg_be0     : unsigned(15 downto 0) := (others => '0');
+   signal   dbg_cut     : unsigned(15 downto 0) := (others => '0');
+   signal   dbg_bad_ab  : std_logic_vector(31 downto 0) := (others => '0');
+   signal   dbg_be0_ab  : std_logic_vector(31 downto 0) := (others => '0');
+
 begin
+
+   -- M2M-UPSTREAM hr-ctrl-probe (MegaX 2026-11-07, temporary): on the user's R3 board a scaler
+   -- burst (64 words) landed on the core's code that the 68000 was running, about once a session,
+   -- although no such command left the arbiter (hr-a21-probe). Counted here at the commands the
+   -- controller starts (16 bits, wrapping, not reset): 0 write commands, 1 those with address
+   -- bit 21 (MegaX's main RAM) and more than 16 words, 2 those whose first word has byteenable
+   -- "00" (no master sends that, hyperram_errata's forced beat does), 3 write bursts cut by a
+   -- read (hr-burst-cut); 4/5 and 6/7 the first command of 1 and of 2 (address bits 23..0, the
+   -- burst count in bits 31..24)
+   p_dbg : process (clk_i)
+   begin
+      if rising_edge(clk_i) then
+         if state = INIT_ST and avm_write_i = '1' and avm_read_i = '0' and avm_address_i(31) = '0' then
+            dbg_wcmd <= dbg_wcmd + 1;
+            if avm_address_i(21) = '1' and unsigned(avm_burstcount_i) > 16 then
+               if dbg_bad = 0 then
+                  dbg_bad_ab <= avm_burstcount_i & avm_address_i(23 downto 0);
+               end if;
+               dbg_bad <= dbg_bad + 1;
+            end if;
+            if avm_byteenable_i = "00" then
+               if dbg_be0 = 0 then
+                  dbg_be0_ab <= avm_burstcount_i & avm_address_i(23 downto 0);
+               end if;
+               dbg_be0 <= dbg_be0 + 1;
+            end if;
+         end if;
+         if state = WRITE_BURST_ST and avm_read_i = '1' and avm_write_i = '0' and rst_i = '0' then
+            dbg_cut <= dbg_cut + 1;
+         end if;
+         dbg_o <= dbg_be0_ab & dbg_bad_ab & std_logic_vector(dbg_cut) & std_logic_vector(dbg_be0) &
+                  std_logic_vector(dbg_bad) & std_logic_vector(dbg_wcmd);
+      end if;
+   end process p_dbg;
 
    fsm_proc : process (clk_i)
    begin

@@ -118,3 +118,11 @@ Rules:
   in MegaX's main RAM (crashes in LHES and SSF2); the probe tells whether the logic sends them
   there or the address goes out right (then the board or the chip). The core reads it in
   C_DEV_X68_DEBUG window 6. To be removed with the fix.
+- **hr-ctrl-probe** (2026-11-07, temporary; `vhdl/controllers/hyperram/hyperram_ctrl.vhd` p_dbg
+  and port `dbg_o`, `hyperram.vhd` passes it on, `framework.vhd` puts it into words 2..9 of
+  `hr_a21_o`): counts the write commands the controller starts, those with address bit 21 and
+  more than 16 words, those whose first word has byteenable "00" (hyperram_errata's forced beat)
+  and the write bursts cut by a read, keeping the first address of two of them. Why: the burst
+  in main RAM was not the frame buffer at its own address (LHES's flat background matched
+  anywhere) but sat on the code the 68000 was running, and hr-a21-probe saw no such command
+  leave the arbiter. To be removed with the fix.
