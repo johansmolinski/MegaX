@@ -126,3 +126,13 @@ Rules:
   in main RAM was not the frame buffer at its own address (LHES's flat background matched
   anywhere) but sat on the code the 68000 was running, and hr-a21-probe saw no such command
   leave the arbiter. To be removed with the fix.
+- **hr-avm-check** (2026-11-07, temporary; `vhdl/framework.vhd` p_hr_chk, read out through
+  `hr_a21_o`, whose words it takes over): an Avalon checker at the HyperRAM arbiter's three slave
+  ports and its output. It follows each port's open write burst and the read words still due,
+  and counts write beats or reads taken while another port's write burst is open, read words
+  delivered to a port with none due, write beats taken while another port has read words due,
+  and reads at the output inside the output's write burst; the first violation is kept. Why: r3e
+  showed the controller never started the scaler's 64-word write in main RAM, yet one landed
+  there on the 68000's code and variables, which the core's own write-backs (at most 16 words)
+  also write. tb/hrmem (M2M=1) carries the same code: 0 on 200 seeds and with resets, and it
+  fires on an arbiter broken on purpose. To be removed with the fix.

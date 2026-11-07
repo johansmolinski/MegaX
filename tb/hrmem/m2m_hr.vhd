@@ -4,6 +4,7 @@
 -- and the chip are modelled at the controller's hb_* lines (avl_m2m.sv).
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 entity m2m_hr is
    port (
@@ -29,7 +30,8 @@ entity m2m_hr is
       hb_rwds_ddr_out_o : out std_logic_vector(1 downto 0);
       hb_rwds_oe_o    : out std_logic;
       hb_rwds_in_i    : in  std_logic;
-      hb_read_o       : out std_logic
+      hb_read_o       : out std_logic;
+      chk_o           : out std_logic_vector(127 downto 0)   -- p_hr_chk: first & counts
    );
 end entity m2m_hr;
 
@@ -50,6 +52,20 @@ architecture sim of m2m_hr is
    signal c_wd, c_rd : std_logic_vector(15 downto 0);
    signal c_be : std_logic_vector(1 downto 0);
    signal c_bc : std_logic_vector(7 downto 0);
+   -- framework.vhd's p_hr_chk (M2M-UPSTREAM hr-avm-check, temporary), the same code on this
+   -- wrapper's names; avl_m2m.sv prints the counts at the end
+   type t_chk_u8  is array (0 to 2) of unsigned(7 downto 0);
+   type t_chk_u10 is array (0 to 2) of unsigned(9 downto 0);
+   type t_chk_cnt is array (1 to 5) of unsigned(15 downto 0);
+   signal chk_wleft              : t_chk_u8  := (others => (others => '0'));
+   signal chk_rleft              : t_chk_u10 := (others => (others => '0'));
+   signal chk_out_wleft          : unsigned(7 downto 0) := (others => '0');
+   signal chk_cnt                : t_chk_cnt := (others => (others => '0'));
+   signal chk_got                : std_logic := '0';
+   signal chk_first              : std_logic_vector(47 downto 0) := (others => '0');
+   signal chk_core_w             : unsigned(15 downto 0) := (others => '0');
+   signal chk_flat : std_logic_vector(79 downto 0);
+
 begin
 
    i_arbit : entity work.avm_arbit_general
@@ -164,5 +180,107 @@ begin
          hb_rwds_in_i        => hb_rwds_in_i,
          hb_read_o           => hb_read_o
       );
+
+   p_hr_chk : process (clk_i)
+      variable v_w, v_r, v_wt, v_rdv : std_logic_vector(2 downto 0);
+      variable v_a   : std_logic_vector(3*32-1 downto 0);
+      variable v_b   : std_logic_vector(3*8-1 downto 0);
+      variable v_cnt : t_chk_cnt;
+      variable v_got : std_logic;
+      variable v_rl  : unsigned(9 downto 0);
+
+      procedure viol(k : natural; i : natural; j : natural) is
+      begin
+         if v_cnt(k) /= x"FFFF" then
+            v_cnt(k) := v_cnt(k) + 1;
+         end if;
+         if v_got = '0' then
+            v_got     := '1';
+            if i < 3 then
+               chk_first(47 downto 16) <= v_b(8*i+7 downto 8*i) & v_a(32*i+23 downto 32*i);
+            else                                        -- 3: the arbiter's output
+               chk_first(47 downto 16) <= a_bc & a_addr(23 downto 0);
+            end if;
+            chk_first(15 downto 0) <= std_logic_vector(to_unsigned(k, 8)) &
+                                      std_logic_vector(to_unsigned(i, 4)) &
+                                      std_logic_vector(to_unsigned(j, 4));
+         end if;
+      end procedure viol;
+   begin
+      if rising_edge(clk_i) then
+         v_w   := s_write_i;
+         v_r   := s_read_i;
+         v_wt  := s_waitrequest_o;
+         v_rdv := s_readdatavalid_o;
+         v_a   := s_address_i;
+         v_b   := s_burstcount_i;
+         v_cnt := chk_cnt;
+         v_got := chk_got;
+
+         for i in 0 to 2 loop
+            if v_w(i) = '1' and v_wt(i) = '0' then
+               for j in 0 to 2 loop
+                  if j /= i and chk_wleft(j) /= 0 then
+                     viol(1, i, j);
+                  end if;
+                  if j /= i and chk_rleft(j) /= 0 then
+                     viol(4, i, j);
+                  end if;
+               end loop;
+               if chk_wleft(i) = 0 then
+                  chk_wleft(i) <= unsigned(v_b(8*i+7 downto 8*i)) - 1;
+                  if i = 1 then
+                     chk_core_w <= chk_core_w + 1;
+                  end if;
+               else
+                  chk_wleft(i) <= chk_wleft(i) - 1;
+               end if;
+            end if;
+
+            v_rl := chk_rleft(i);
+            if v_rdv(i) = '1' then
+               if v_rl = 0 then
+                  viol(2, i, i);
+               else
+                  v_rl := v_rl - 1;
+               end if;
+            end if;
+            if v_r(i) = '1' and v_wt(i) = '0' then
+               for j in 0 to 2 loop
+                  if j /= i and chk_wleft(j) /= 0 then
+                     viol(3, i, j);
+                  end if;
+               end loop;
+               v_rl := v_rl + unsigned(v_b(8*i+7 downto 8*i));
+            end if;
+            chk_rleft(i) <= v_rl;
+         end loop;
+
+         if a_write = '1' and a_wait = '0' then
+            if chk_out_wleft = 0 then
+               chk_out_wleft <= unsigned(a_bc) - 1;
+            else
+               chk_out_wleft <= chk_out_wleft - 1;
+            end if;
+         end if;
+         if a_read = '1' and a_wait = '0' and chk_out_wleft /= 0 then
+            viol(5, 3, 3);
+         end if;
+
+         -- the controller drops a burst in flight at rst_i
+         if rst_i = '1' then
+            chk_wleft     <= (others => (others => '0'));
+            chk_rleft     <= (others => (others => '0'));
+            chk_out_wleft <= (others => '0');
+         end if;
+
+         chk_cnt <= v_cnt;
+         chk_got <= v_got;
+      end if;
+   end process p_hr_chk;
+
+   chk_flat <= std_logic_vector(chk_cnt(5)) & std_logic_vector(chk_cnt(4)) & std_logic_vector(chk_cnt(3)) &
+               std_logic_vector(chk_cnt(2)) & std_logic_vector(chk_cnt(1));
+   chk_o    <= chk_first & chk_flat;
 
 end architecture sim;

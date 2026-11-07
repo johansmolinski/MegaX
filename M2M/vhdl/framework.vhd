@@ -330,6 +330,17 @@ signal a21_out_addr           : std_logic_vector(31 downto 0) := (others => '0')
 signal a21_out_bc             : std_logic_vector(7 downto 0) := (others => '0');
 -- M2M-UPSTREAM hr-ctrl-probe (MegaX 2026-11-07, temporary): hyperram_ctrl's p_dbg
 signal hr_ctrl_dbg            : std_logic_vector(127 downto 0);
+-- M2M-UPSTREAM hr-avm-check (MegaX 2026-11-07, temporary): see p_hr_chk
+type t_chk_u8  is array (0 to 2) of unsigned(7 downto 0);
+type t_chk_u10 is array (0 to 2) of unsigned(9 downto 0);
+type t_chk_cnt is array (1 to 5) of unsigned(15 downto 0);
+signal chk_wleft              : t_chk_u8  := (others => (others => '0'));
+signal chk_rleft              : t_chk_u10 := (others => (others => '0'));
+signal chk_out_wleft          : unsigned(7 downto 0) := (others => '0');
+signal chk_cnt                : t_chk_cnt := (others => (others => '0'));
+signal chk_got                : std_logic := '0';
+signal chk_first              : std_logic_vector(47 downto 0) := (others => '0');
+signal chk_core_w             : unsigned(15 downto 0) := (others => '0');
 signal audio_rst              : std_logic;
 signal hdmi_rst               : std_logic;
 
@@ -820,9 +831,128 @@ begin
          --             std_logic_vector(a21_out_bad) & std_logic_vector(a21_out_big) &
          --             std_logic_vector(a21_out_cmd) & std_logic_vector(a21_dig_bad) &
          --             std_logic_vector(a21_dig_cmd);
-         hr_a21_o <= hr_ctrl_dbg & std_logic_vector(a21_out_bad) & std_logic_vector(a21_dig_cmd);
+         -- M2M-UPSTREAM hr-avm-check (MegaX 2026-11-07, temporary): words 0..4 p_hr_chk's counts
+         -- 1..5, 5 hr-ctrl-probe's write commands with bit 21 and more than 16 words, 6 the first
+         -- violation (kind, port, other port: bits 15..8, 7..4, 3..0), 7/8 its address (bits
+         -- 15..0; 23..16 in 7..0) and burst count (8: 15..8), 9 the core's write commands (alive)
+         -- hr_a21_o <= hr_ctrl_dbg & std_logic_vector(a21_out_bad) & std_logic_vector(a21_dig_cmd);
+         hr_a21_o <= std_logic_vector(chk_core_w) & chk_first(47 downto 16) & chk_first(15 downto 0) &
+                     hr_ctrl_dbg(31 downto 16) & std_logic_vector(chk_cnt(5)) &
+                     std_logic_vector(chk_cnt(4)) & std_logic_vector(chk_cnt(3)) &
+                     std_logic_vector(chk_cnt(2)) & std_logic_vector(chk_cnt(1));
       end if;
    end process p_hr_a21;
+
+   -- M2M-UPSTREAM hr-avm-check (MegaX 2026-11-07, temporary): an Avalon checker at the HyperRAM
+   -- arbiter's three slave ports (0 QNICE, 1 the core, 2 the scaler) and its output. On the
+   -- user's R3 board a scaler burst (64 words) landed in main RAM on the 68000's code and
+   -- variables, but no such write command left the arbiter (hr-a21-probe) or started in the
+   -- controller (hr-ctrl-probe); the core's own write-backs (at most 16 words) to that block
+   -- could have carried the scaler's beats. Each port's open write burst (beats still owed) and
+   -- read words still due are followed; counted (16 bits, saturating, not reset):
+   -- 1 a write beat taken from one port while another port's write burst is open,
+   -- 2 a read word delivered to a port that has none due,
+   -- 3 a read taken from one port while another port's write burst is open,
+   -- 4 a write beat taken from one port while another port still has read words due,
+   -- 5 a read at the arbiter's output while the output's write burst is open (hr-burst-cut).
+   -- The first violation is kept: kind, port, other port, the beat's address and burst count.
+   p_hr_chk : process (hr_clk)
+      variable v_w, v_r, v_wt, v_rdv : std_logic_vector(2 downto 0);
+      variable v_a   : std_logic_vector(3*32-1 downto 0);
+      variable v_b   : std_logic_vector(3*8-1 downto 0);
+      variable v_cnt : t_chk_cnt;
+      variable v_got : std_logic;
+      variable v_rl  : unsigned(9 downto 0);
+
+      procedure viol(k : natural; i : natural; j : natural) is
+      begin
+         if v_cnt(k) /= x"FFFF" then
+            v_cnt(k) := v_cnt(k) + 1;
+         end if;
+         if v_got = '0' then
+            v_got     := '1';
+            if i < 3 then
+               chk_first(47 downto 16) <= v_b(8*i+7 downto 8*i) & v_a(32*i+23 downto 32*i);
+            else                                        -- 3: the arbiter's output
+               chk_first(47 downto 16) <= hr_burstcount & hr_address(23 downto 0);
+            end if;
+            chk_first(15 downto 0) <= std_logic_vector(to_unsigned(k, 8)) &
+                                      std_logic_vector(to_unsigned(i, 4)) &
+                                      std_logic_vector(to_unsigned(j, 4));
+         end if;
+      end procedure viol;
+   begin
+      if rising_edge(hr_clk) then
+         v_w   := hr_dig_write         & hr_core_write_i         & hr_qnice_write;
+         v_r   := hr_dig_read          & hr_core_read_i          & hr_qnice_read;
+         v_wt  := hr_dig_waitrequest   & hr_core_waitrequest_o   & hr_qnice_waitrequest;
+         v_rdv := hr_dig_readdatavalid & hr_core_readdatavalid_o & hr_qnice_readdatavalid;
+         v_a   := hr_dig_address       & hr_core_address_i       & hr_qnice_address;
+         v_b   := hr_dig_burstcount    & hr_core_burstcount_i    & hr_qnice_burstcount;
+         v_cnt := chk_cnt;
+         v_got := chk_got;
+
+         for i in 0 to 2 loop
+            if v_w(i) = '1' and v_wt(i) = '0' then
+               for j in 0 to 2 loop
+                  if j /= i and chk_wleft(j) /= 0 then
+                     viol(1, i, j);
+                  end if;
+                  if j /= i and chk_rleft(j) /= 0 then
+                     viol(4, i, j);
+                  end if;
+               end loop;
+               if chk_wleft(i) = 0 then
+                  chk_wleft(i) <= unsigned(v_b(8*i+7 downto 8*i)) - 1;
+                  if i = 1 then
+                     chk_core_w <= chk_core_w + 1;
+                  end if;
+               else
+                  chk_wleft(i) <= chk_wleft(i) - 1;
+               end if;
+            end if;
+
+            v_rl := chk_rleft(i);
+            if v_rdv(i) = '1' then
+               if v_rl = 0 then
+                  viol(2, i, i);
+               else
+                  v_rl := v_rl - 1;
+               end if;
+            end if;
+            if v_r(i) = '1' and v_wt(i) = '0' then
+               for j in 0 to 2 loop
+                  if j /= i and chk_wleft(j) /= 0 then
+                     viol(3, i, j);
+                  end if;
+               end loop;
+               v_rl := v_rl + unsigned(v_b(8*i+7 downto 8*i));
+            end if;
+            chk_rleft(i) <= v_rl;
+         end loop;
+
+         if hr_write = '1' and hr_waitrequest = '0' then
+            if chk_out_wleft = 0 then
+               chk_out_wleft <= unsigned(hr_burstcount) - 1;
+            else
+               chk_out_wleft <= chk_out_wleft - 1;
+            end if;
+         end if;
+         if hr_read = '1' and hr_waitrequest = '0' and chk_out_wleft /= 0 then
+            viol(5, 3, 3);
+         end if;
+
+         -- the controller drops a burst in flight at hr_rst
+         if hr_rst = '1' then
+            chk_wleft     <= (others => (others => '0'));
+            chk_rleft     <= (others => (others => '0'));
+            chk_out_wleft <= (others => '0');
+         end if;
+
+         chk_cnt <= v_cnt;
+         chk_got <= v_got;
+      end if;
+   end process p_hr_chk;
 
    i_avm_arbit_general : entity work.avm_arbit_general
       generic map (

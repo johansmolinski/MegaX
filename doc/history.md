@@ -1145,3 +1145,19 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   (the first's address and burst count kept), those whose first word has byteenable `00`
   (hyperram_errata's forced beat as a command of its own), the write bursts cut by a read.
   `megax-r3e` (R3, REF megax-r3d).
+- `megax-r3e` on the R3A: LHES crash "SR=$2004:PC=$00076286". HyperRAM 0x23B140-0x23B17F (68000
+  $76280-$762FF, 64 words, aligned) holds scaler data (`4A69`/`DEDB`), on code and on LHES's
+  variables ($7629A-$762C0, which the 68000 writes); the $76000 block is intact this time. Probe:
+  **no write command with bit 21 and more than 16 words started in the controller** (and none left
+  the arbiter), **no burst cut** (hr-burst-cut never ran). The byteenable-00 count is no use: the
+  core's masked write-backs dominate it, and 16-bit counters wrap several times a second (only
+  zero/non-zero means anything). Dump saved: ~/megax-work/hw/crash-r3e-76286.bin (windows 23A-23B).
+  The R3A's IS66WVH8M8BLL data sheet: tRWR 40 ns at 100 MHz, counted from CS# high to the end of
+  CA1; the controller gives ~57 ns after reads and after writes. Left: the scaler's beats inside
+  the core's own write bursts (at most 16 words, so invisible to the command probes), or the chip.
+- M2M-UPSTREAM hr-avm-check (framework.vhd p_hr_chk): an Avalon checker at the arbiter's ports
+  (write beats or reads while another port's write burst is open, read words nobody is due, write
+  beats while another port has read words due, reads inside the output's write burst; the first
+  kept). tb/hrmem carries the same code (m2m_hr.vhd, counts in the final line and the dump): 0 on
+  200 seeds and +hrrst=12; with the arbiter's s0 write burst ended one beat early on purpose it
+  counts 1098/0/19/0/118. `megax-r3f` (R3, REF megax-r3e).

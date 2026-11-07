@@ -29,7 +29,8 @@ module avl_m2m (
    wire [1:0] hb_ck, hb_rwds_out; wire [15:0] hb_dq_out;
    reg  [15:0] hb_dq_in = 0; reg hb_dq_ie = 0, hb_rwds_in = 0;
 
-   m2m_hr u_hr(.clk_i(clk), .rst_i(rst),
+   wire [127:0] chk;                        // m2m_hr's p_hr_chk (hr-avm-check)
+   m2m_hr u_hr(.clk_i(clk), .rst_i(rst), .chk_o(chk),
       .s_write_i({d_write, write, q_write}), .s_read_i({d_read, read, q_read}),
       .s_address_i({d_addr, address, q_addr}), .s_writedata_i({d_wd, writedata, q_wd}),
       .s_byteenable_i({2'b11, byteenable, 2'b11}), .s_burstcount_i({8'd64, burstcount, 8'd1}),
@@ -54,6 +55,8 @@ module avl_m2m (
       end else rstn_low <= 0;
    end
    final $display("avl_m2m: RESET# low for at most %0d clocks", rstn_low_max);
+   final $display("avl_m2m: hr-avm-check counts 1..5: %0d %0d %0d %0d %0d, first %012x",
+                  chk[15:0], chk[31:16], chk[47:32], chk[63:48], chk[79:64], chk[127:80]);
 
    // the core port's statistics (as avl_model)
    int n_rd = 0, n_wr = 0, n_rw = 0, n_ww = 0;
@@ -134,6 +137,8 @@ module avl_m2m (
 
    // the state of everything at a hang
    task automatic dump(string why);
+      $display("  hr-avm-check counts 1..5: %0d %0d %0d %0d %0d, first %012x",
+               chk[15:0], chk[31:16], chk[47:32], chk[63:48], chk[79:64], chk[127:80]);
       for (int k = 0; k < 64; k++) begin
          tr_t e = ring[(rp + k) % 64];
          $display("  %0t ctrl st %0d ca %0d wcc %0d wq %0d csn %0d ck %b | ctrl in w%0d r%0d bc %0d | w(s,c,q) %b r %b wait %b | top g %0d%0d  01 g %0d%0d | errata/config %b",
