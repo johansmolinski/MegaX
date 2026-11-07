@@ -1167,3 +1167,15 @@ waits for a disk), so a floppy is what makes the hardware visibly testable.
   follow a clock later, and the arbiter's lines are registered first (the checker runs one clock
   behind). tb/hrmem: 0 on 200 seeds and +hrrst=12, the broken arbiter gives the same counts as
   before. `megax-r3g` (R3, REF megax-r3e).
+- `megax-r3g` (R3, REF megax-r3e) OK, WNS +0.103 ns, WHS +0.014 ns, 23 critical warnings, md5
+  d13dc4720b18897d88cb2a4d824d6dd4 (framework +204 LUTs, +93 FFs: the checker less the bit-21
+  probe's counters). Loaded (the user's OK). LHES crash while switching drives (C-F, the four HDS
+  images; "very easy to trigger"): SR=$2000:PC=$00FF6D28, in the IPL ROM's byte copy loop
+  `move.b (a2)+,(a1)+` (a bad pointer from RAM). **hr-avm-check at the crash: all counts 0**, the
+  controller started no 64-word write with bit 21, the core's port alive. The IPL ROM in the
+  HyperRAM: 0 differences from boot.rom ($FE0000-$FFFFFF). Main RAM $000000-$0BFFFF: no block of
+  the screen's colours (`4A69 DEDB C6DB 06DB`, the frame buffer read at the crash).
+- M2M-UPSTREAM hr-fixed-latency (`hyperram_config.vhd`): CR0 fixed latency (the device default;
+  every transaction waits 8 clocks, RWDS always high in CA) instead of variable, to rule the
+  controller's RWDS sample in or out (the user asked whether the variable latency is the cause).
+  tb/hrmem PASS (its chip model does not change with the bit). `megax-r3h` (R3, REF megax-r3g).

@@ -109,7 +109,12 @@ begin
                cfg_writedata(R_C0_DRIVE)    <= "111";                                           -- 19 ohms (maximal drive strength)
                cfg_writedata(R_C0_RESERVED) <= "1111";
                cfg_writedata(R_C0_LATENCY)  <= std_logic_vector(to_unsigned(G_LATENCY, 4) - 5);
-               cfg_writedata(C_C0_FIXED)    <= '0';                                             -- variable
+               -- M2M-UPSTREAM hr-fixed-latency (MegaX 2026-11-07): fixed latency (the device's
+               -- default), so every transaction waits 2 x G_LATENCY and RWDS is always high in CA:
+               -- MegaX's R3 build (main RAM in the HyperRAM) on the user's R3A board, a test
+               -- against the scaler bursts landing in main RAM
+               -- cfg_writedata(C_C0_FIXED)    <= '0';                                             -- variable
+               cfg_writedata(C_C0_FIXED)    <= '1';                                             -- fixed
                cfg_writedata(C_C0_HYBRID)   <= '1';                                             -- legacy (default)
                cfg_writedata(R_C0_BURST)    <= "11";                                            -- 32 bytes (default)
                cfg_byteenable               <= "11";

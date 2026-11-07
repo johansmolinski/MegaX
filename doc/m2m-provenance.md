@@ -136,3 +136,9 @@ Rules:
   there on the 68000's code and variables, which the core's own write-backs (at most 16 words)
   also write. tb/hrmem (M2M=1) carries the same code: 0 on 200 seeds and with resets, and it
   fires on an arbiter broken on purpose. To be removed with the fix.
+- **hr-fixed-latency** (2026-11-07; `vhdl/controllers/hyperram/hyperram_config.vhd`): CR0 with
+  fixed latency (bit 3 = 1, the device's power-on default) instead of variable: every array
+  access waits 2 x G_LATENCY clocks, RWDS is high in every command phase, hyperram_ctrl samples it
+  as before. Why: a test on the user's R3A (IS66WVH8M8BLL) against the scaler bursts landing in
+  main RAM, ruling the variable latency (the controller's one RWDS sample per command) in or out.
+  Costs 4 clocks per transaction.
